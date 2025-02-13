@@ -1,6 +1,6 @@
 use super::{
     matching::{EventData, EventInputData},
-    EventMessage, ItemWithSoundIds, ItemsWithSounds, ThrowItemConfig, ThrowItemMessage,
+    ItemWithSoundIds, ItemsWithSounds, OverlayMessage, ThrowItemConfig, ThrowItemMessage,
 };
 use crate::{
     database::entity::{
@@ -31,7 +31,7 @@ pub async fn produce_outcome_message(
 
     event: EventModel,
     event_data: EventData,
-) -> anyhow::Result<Option<EventMessage>> {
+) -> anyhow::Result<Option<OverlayMessage>> {
     match event.outcome {
         EventOutcome::ThrowBits(data) => throw_bits_outcome(db, event_data, data).await.map(Some),
         EventOutcome::Throwable(data) => throwable_outcome(db, event_data, data).await.map(Some),
@@ -174,7 +174,7 @@ async fn throw_bits_outcome(
     db: &DatabaseConnection,
     event_data: EventData,
     data: EventOutcomeBits,
-) -> anyhow::Result<EventMessage> {
+) -> anyhow::Result<OverlayMessage> {
     let input = match event_data.input_data {
         EventInputData::Bits { bits, .. } => bits,
         _ => {
@@ -221,7 +221,7 @@ async fn throw_channel_emotes_outcome(
     twitch: &Twitch,
     event_data: EventData,
     data: EventOutcomeChannelEmotes,
-) -> anyhow::Result<EventMessage> {
+) -> anyhow::Result<OverlayMessage> {
     let user = match event_data.user {
         Some(user) => user,
         None => {
@@ -289,7 +289,7 @@ fn create_throwable_message(
     items: ItemsWithSounds,
     amount: ThrowableAmountData,
     input_amount: Option<i64>,
-) -> anyhow::Result<EventMessage> {
+) -> anyhow::Result<OverlayMessage> {
     match amount {
         ThrowableAmountData::Throw {
             amount,
@@ -310,7 +310,7 @@ fn create_throwable_message(
                 amount
             };
 
-            Ok(EventMessage::ThrowItem(ThrowItemMessage {
+            Ok(OverlayMessage::ThrowItem(ThrowItemMessage {
                 items,
                 config: ThrowItemConfig::All { amount },
             }))
@@ -336,7 +336,7 @@ fn create_throwable_message(
                 amount
             };
 
-            Ok(EventMessage::ThrowItem(ThrowItemMessage {
+            Ok(OverlayMessage::ThrowItem(ThrowItemMessage {
                 items,
                 config: ThrowItemConfig::Barrage {
                     amount_per_throw,
@@ -353,15 +353,15 @@ async fn throwable_outcome(
     db: &DatabaseConnection,
     event_data: EventData,
     data: EventOutcomeThrowable,
-) -> anyhow::Result<EventMessage> {
+) -> anyhow::Result<OverlayMessage> {
     let items = resolve_items(db, &data.throwable_ids).await?;
 
     create_throwable_message(items, data.amount, get_event_data_input_amount(&event_data))
 }
 
 /// Produce a hotkey trigger message
-fn trigger_hotkey_outcome(data: EventOutcomeTriggerHotkey) -> anyhow::Result<EventMessage> {
-    Ok(EventMessage::TriggerHotkey {
+fn trigger_hotkey_outcome(data: EventOutcomeTriggerHotkey) -> anyhow::Result<OverlayMessage> {
+    Ok(OverlayMessage::TriggerHotkey {
         hotkey_id: data.hotkey_id,
     })
 }
@@ -370,12 +370,12 @@ fn trigger_hotkey_outcome(data: EventOutcomeTriggerHotkey) -> anyhow::Result<Eve
 async fn play_sound_outcome(
     db: &DatabaseConnection,
     data: EventOutcomePlaySound,
-) -> anyhow::Result<EventMessage> {
+) -> anyhow::Result<OverlayMessage> {
     let config = SoundModel::get_by_id_partial(db, data.sound_id)
         .await?
         .context("sound config not found")?;
 
-    Ok(EventMessage::PlaySound { config })
+    Ok(OverlayMessage::PlaySound { config })
 }
 
 pub async fn resolve_items(

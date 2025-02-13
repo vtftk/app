@@ -15,7 +15,7 @@ use futures::Stream;
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::{
-    events::{EventMessage, EventRecvHandle},
+    events::{OverlayMessage, EventRecvHandle},
     state::runtime_app_data::RuntimeAppDataStore,
 };
 
@@ -45,7 +45,7 @@ pub async fn handle_sse(
 /// decreased and associated state is dropped if overlays reaches zero
 pub struct OverlayEventStream {
     runtime_app_data: RuntimeAppDataStore,
-    stream: BroadcastStream<EventMessage>,
+    stream: BroadcastStream<OverlayMessage>,
 }
 
 impl Stream for OverlayEventStream {

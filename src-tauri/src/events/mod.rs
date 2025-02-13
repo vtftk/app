@@ -51,11 +51,11 @@ pub enum ThrowItemConfig {
     },
 }
 
-pub type EventMessageChannel = broadcast::Sender<EventMessage>;
+pub type EventMessageChannel = broadcast::Sender<OverlayMessage>;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "type")]
-pub enum EventMessage {
+pub enum OverlayMessage {
     // Sets the current calibration step
     SetCalibrationStep {
         step: CalibrationStep,
@@ -101,7 +101,7 @@ pub enum EventMessage {
     },
 }
 
-pub struct EventRecvHandle(pub broadcast::Receiver<EventMessage>);
+pub struct EventRecvHandle(pub broadcast::Receiver<OverlayMessage>);
 
 impl Clone for EventRecvHandle {
     fn clone(&self) -> Self {
@@ -109,7 +109,7 @@ impl Clone for EventRecvHandle {
     }
 }
 
-pub type EventSendHandle = broadcast::Sender<EventMessage>;
+pub type EventSendHandle = broadcast::Sender<OverlayMessage>;
 
 pub fn create_event_channel() -> (EventSendHandle, EventRecvHandle) {
     let (event_tx, rx) = broadcast::channel(10);

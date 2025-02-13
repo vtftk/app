@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     database::entity::{items::ItemModel, items_sounds::SoundType, sounds::SoundModel},
-    events::{EventMessage, ItemWithSoundIds},
+    events::{OverlayMessage, ItemWithSoundIds},
     script::runtime::ScriptRuntimeData,
 };
 use anyhow::Context;
@@ -14,7 +14,7 @@ use uuid::Uuid;
 #[serde]
 pub async fn op_vtftk_emit_event_message(
     state: Rc<RefCell<OpState>>,
-    #[serde] message: EventMessage,
+    #[serde] message: OverlayMessage,
 ) -> anyhow::Result<()> {
     let event_sender = {
         let state = state.borrow();

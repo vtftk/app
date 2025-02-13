@@ -6,7 +6,7 @@ use crate::{
     events::{
         matching::{EventData, EventInputData},
         processing::execute_event,
-        EventMessage,
+        OverlayMessage,
     },
     script::runtime::ScriptExecutorHandle,
     twitch::manager::Twitch,
@@ -65,7 +65,7 @@ pub fn create_scheduler(
     db: DatabaseConnection,
     twitch: Twitch,
     script_handle: ScriptExecutorHandle,
-    event_sender: broadcast::Sender<EventMessage>,
+    event_sender: broadcast::Sender<OverlayMessage>,
 ) -> SchedulerHandle {
     let (tx, rx) = mpsc::channel(5);
 
@@ -111,7 +111,7 @@ struct SchedulerEventLoop {
     db: DatabaseConnection,
     twitch: Twitch,
     script_handle: ScriptExecutorHandle,
-    event_sender: broadcast::Sender<EventMessage>,
+    event_sender: broadcast::Sender<OverlayMessage>,
 }
 
 async fn execute_scheduled_event(

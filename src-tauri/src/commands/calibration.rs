@@ -1,7 +1,7 @@
 use crate::{
     commands::CmdResult,
     database::entity::model_data::ModelDataModel,
-    events::{EventMessage, EventMessageChannel},
+    events::{EventMessageChannel, OverlayMessage},
     http::models::calibration::CalibrationStep,
 };
 use sea_orm::DatabaseConnection;
@@ -13,7 +13,7 @@ pub fn set_calibration_step(
     step: CalibrationStep,
     event_sender: State<'_, EventMessageChannel>,
 ) -> CmdResult<()> {
-    event_sender.send(EventMessage::SetCalibrationStep { step })?;
+    event_sender.send(OverlayMessage::SetCalibrationStep { step })?;
     Ok(())
 }
 
@@ -24,7 +24,7 @@ pub fn calibration_move_model(
     y: f32,
     event_sender: State<'_, EventMessageChannel>,
 ) -> CmdResult<()> {
-    event_sender.send(EventMessage::MoveModel { x, y })?;
+    event_sender.send(OverlayMessage::MoveModel { x, y })?;
     Ok(())
 }
 

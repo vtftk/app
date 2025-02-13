@@ -8,7 +8,7 @@ use crate::{
         event_executions::EventExecutionModel,
         event_logs::EventLogsModel,
     },
-    events::{EventMessage, EventMessageChannel},
+    events::{OverlayMessage, EventMessageChannel},
     state::runtime_app_data::{RuntimeAppData, RuntimeAppDataStore},
     storage::{Storage, StorageFolder},
 };
@@ -20,7 +20,7 @@ use tokio::try_join;
 /// of hotkeys from VTube Studio
 #[tauri::command]
 pub fn update_hotkeys(event_sender: tauri::State<'_, EventMessageChannel>) -> CmdResult<()> {
-    event_sender.send(EventMessage::UpdateHotkeys)?;
+    event_sender.send(OverlayMessage::UpdateHotkeys)?;
     Ok(())
 }
 
@@ -55,7 +55,7 @@ pub async fn set_app_data(
     let model = AppDataModel::set(db.inner(), app_data).await?;
 
     // Inform the overlay of the new app data
-    _ = event_sender.send(EventMessage::AppDataUpdated {
+    _ = event_sender.send(OverlayMessage::AppDataUpdated {
         app_data: Box::new(model.data),
     });
 
