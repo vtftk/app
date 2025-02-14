@@ -16,8 +16,8 @@ use crate::{
             CommandWithContext, EventData, EventInputData, EventMatchingData,
         },
         outcome::produce_outcome_message,
-        OverlayMessage,
     },
+    overlay::OverlayMessageSender,
     script::runtime::{
         CommandContext, CommandContextUser, RuntimeExecutionContext, ScriptExecutorHandle,
     },
@@ -39,7 +39,7 @@ pub async fn process_twitch_events(
     db: DatabaseConnection,
     twitch: Twitch,
     script_handle: ScriptExecutorHandle,
-    event_sender: broadcast::Sender<OverlayMessage>,
+    event_sender: OverlayMessageSender,
 
     mut twitch_event_rx: broadcast::Receiver<TwitchEvent>,
 ) {
@@ -68,7 +68,7 @@ async fn process_twitch_event(
     db: DatabaseConnection,
     twitch: Twitch,
     script_handle: ScriptExecutorHandle,
-    event_sender: broadcast::Sender<OverlayMessage>,
+    event_sender: OverlayMessageSender,
     event: TwitchEvent,
 ) -> anyhow::Result<()> {
     let match_data: EventMatchingData = match event {
@@ -421,7 +421,7 @@ pub async fn execute_event(
     twitch: &Twitch,
     script_handle: &ScriptExecutorHandle,
 
-    event_sender: &broadcast::Sender<OverlayMessage>,
+    event_sender: &OverlayMessageSender,
     event: EventModel,
     event_data: EventData,
 ) -> anyhow::Result<()> {

@@ -14,13 +14,13 @@ export async function notifyProgressCalibration(body: CalibrationStepData) {
 }
 
 export async function getCalibrationData(): Promise<ModelData[]> {
-  const response = await fetch(new URL("/calibration-data", BACKEND_HTTP));
+  const response = await fetch(new URL("/calibration", BACKEND_HTTP));
   return response.json();
 }
 
 export async function updateRuntimeData(body: Partial<RuntimeAppData>) {
   try {
-    await fetch(new URL("/runtime-app-data", BACKEND_HTTP), {
+    await fetch(new URL("/overlay/data", BACKEND_HTTP), {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -37,13 +37,13 @@ export async function getVTFTKLogo(): Promise<string> {
 }
 
 export async function getPersistedAuthToken(): Promise<string | null> {
-  const response = await fetch(new URL("/data/get-auth-token", BACKEND_HTTP));
+  const response = await fetch(new URL("/data/vt-auth-token", BACKEND_HTTP));
   const data = await response.json();
   return data.auth_token ?? null;
 }
 
 export async function setPersistedAuthToken(token: string | null) {
-  await fetch(new URL("/data/set-auth-token", BACKEND_HTTP), {
+  await fetch(new URL("/data/vt-auth-token", BACKEND_HTTP), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({

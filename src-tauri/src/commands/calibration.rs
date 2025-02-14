@@ -1,8 +1,8 @@
 use crate::{
     commands::CmdResult,
     database::entity::model_data::ModelDataModel,
-    events::{EventMessageChannel, OverlayMessage},
     http::models::calibration::CalibrationStep,
+    overlay::{OverlayMessage, OverlayMessageSender},
 };
 use sea_orm::DatabaseConnection;
 use tauri::State;
@@ -11,9 +11,9 @@ use tauri::State;
 #[tauri::command]
 pub fn set_calibration_step(
     step: CalibrationStep,
-    event_sender: State<'_, EventMessageChannel>,
+    overlay: State<'_, OverlayMessageSender>,
 ) -> CmdResult<()> {
-    event_sender.send(OverlayMessage::SetCalibrationStep { step })?;
+    overlay.send(OverlayMessage::SetCalibrationStep { step })?;
     Ok(())
 }
 
@@ -22,9 +22,9 @@ pub fn set_calibration_step(
 pub fn calibration_move_model(
     x: f32,
     y: f32,
-    event_sender: State<'_, EventMessageChannel>,
+    overlay: State<'_, OverlayMessageSender>,
 ) -> CmdResult<()> {
-    event_sender.send(OverlayMessage::MoveModel { x, y })?;
+    overlay.send(OverlayMessage::MoveModel { x, y })?;
     Ok(())
 }
 

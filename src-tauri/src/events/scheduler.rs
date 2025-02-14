@@ -6,8 +6,8 @@ use crate::{
     events::{
         matching::{EventData, EventInputData},
         processing::execute_event,
-        OverlayMessage,
     },
+    overlay::OverlayMessageSender,
     script::runtime::ScriptExecutorHandle,
     twitch::manager::Twitch,
 };
@@ -18,11 +18,9 @@ use log::{debug, error};
 use sea_orm::DatabaseConnection;
 use std::{collections::BinaryHeap, future::Future, pin::Pin, task::Poll, time::Duration};
 use tokio::{
-    sync::{broadcast, mpsc},
+    sync::mpsc,
     time::{sleep_until, Instant},
 };
-
-use super::EventMessageChannel;
 
 pub struct ScheduledEvent {
     pub event: EventModel,
@@ -65,7 +63,7 @@ pub fn create_scheduler(
     db: DatabaseConnection,
     twitch: Twitch,
     script_handle: ScriptExecutorHandle,
-    event_sender: broadcast::Sender<OverlayMessage>,
+    event_sender: OverlayMessageSender,
 ) -> SchedulerHandle {
     let (tx, rx) = mpsc::channel(5);
 
@@ -111,14 +109,14 @@ struct SchedulerEventLoop {
     db: DatabaseConnection,
     twitch: Twitch,
     script_handle: ScriptExecutorHandle,
-    event_sender: broadcast::Sender<OverlayMessage>,
+    event_sender: OverlayMessageSender,
 }
 
 async fn execute_scheduled_event(
     db: DatabaseConnection,
     twitch: Twitch,
     script_handle: ScriptExecutorHandle,
-    event_sender: EventMessageChannel,
+    event_sender: OverlayMessageSender,
     event: EventModel,
 ) -> anyhow::Result<()> {
     let min_chat_messages = match &event.trigger {

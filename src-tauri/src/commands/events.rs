@@ -10,10 +10,8 @@ use crate::{
         events::{CreateEvent, EventModel, EventTrigger, EventTriggerType, UpdateEvent},
         shared::{ExecutionsQuery, LogsQuery, UpdateOrdering},
     },
-    events::{
-        matching::EventData, outcome::produce_outcome_message, scheduler::SchedulerHandle,
-        EventMessageChannel,
-    },
+    events::{matching::EventData, outcome::produce_outcome_message, scheduler::SchedulerHandle},
+    overlay::OverlayMessageSender,
     script::runtime::ScriptExecutorHandle,
     twitch::manager::Twitch,
 };
@@ -111,7 +109,7 @@ pub async fn test_event_by_id(
     event_id: Uuid,
     event_data: EventData,
     db: State<'_, DatabaseConnection>,
-    event_sender: State<'_, EventMessageChannel>,
+    event_sender: State<'_, OverlayMessageSender>,
     twitch: State<'_, Twitch>,
     script_handle: State<'_, ScriptExecutorHandle>,
 ) -> CmdResult<()> {

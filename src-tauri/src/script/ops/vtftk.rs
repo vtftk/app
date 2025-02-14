@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     database::entity::{items::ItemModel, items_sounds::SoundType, sounds::SoundModel},
-    events::{OverlayMessage, ItemWithSoundIds},
+    overlay::{ItemWithSoundIds, OverlayMessage},
     script::runtime::ScriptRuntimeData,
 };
 use anyhow::Context;
@@ -12,14 +12,14 @@ use uuid::Uuid;
 /// Emit event messages to the websocket
 #[op2(async)]
 #[serde]
-pub async fn op_vtftk_emit_event_message(
+pub async fn op_vtftk_emit_overlay_message(
     state: Rc<RefCell<OpState>>,
     #[serde] message: OverlayMessage,
 ) -> anyhow::Result<()> {
     let event_sender = {
         let state = state.borrow();
         let data = state.borrow::<ScriptRuntimeData>();
-        data.event_sender.clone()
+        data.overlay_sender.clone()
     };
 
     event_sender

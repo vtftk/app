@@ -1,11 +1,9 @@
 use anyhow::Context;
 use database::{clean_old_data, entity::app_data::AppDataModel};
-use events::{
-    create_event_channel, processing::process_twitch_events, scheduler::create_scheduler,
-};
+use events::{processing::process_twitch_events, scheduler::create_scheduler};
+use overlay::{create_overlay_channel, OverlayDataStore};
 use script::runtime::{create_script_executor, ScriptRuntimeData};
 use sea_orm::DatabaseConnection;
-use state::runtime_app_data::RuntimeAppDataStore;
 use std::error::Error;
 use storage::Storage;
 use tauri::{
@@ -18,8 +16,8 @@ mod commands;
 mod database;
 mod events;
 mod http;
+mod overlay;
 mod script;
-mod state;
 mod storage;
 mod tray;
 mod twitch;
@@ -121,15 +119,15 @@ fn setup(app: &mut App) -> Result<(), Box<dyn Error>> {
         .context("failed to load database")?;
 
     let (twitch, twitch_event_rx) = Twitch::new(handle.clone());
-    let (event_tx, event_rx) = create_event_channel();
+    let (overlay_tx, overlay_rx) = create_overlay_channel();
 
-    let runtime_app_data = RuntimeAppDataStore::new(handle.clone());
+    let overlay_data = OverlayDataStore::new(handle.clone());
 
     let script_handle = create_script_executor(
         app_data_path.join("modules"),
         ScriptRuntimeData {
             db: db.clone(),
-            event_sender: event_tx.clone(),
+            overlay_sender: overlay_tx.clone(),
             twitch: twitch.clone(),
         },
     );
@@ -139,7 +137,7 @@ fn setup(app: &mut App) -> Result<(), Box<dyn Error>> {
         db.clone(),
         twitch.clone(),
         script_handle.clone(),
-        event_tx.clone(),
+        overlay_tx.clone(),
     );
 
     let storage = Storage::new_fs(handle)?;
@@ -147,14 +145,14 @@ fn setup(app: &mut App) -> Result<(), Box<dyn Error>> {
     // Run background cleanup
     spawn(clean_old_data(db.clone()));
 
-    // Provide runtime app data stores
-    app.manage(runtime_app_data.clone());
+    // Provide overlay data store
+    app.manage(overlay_data.clone());
 
     // Provide access to the scheduler
     app.manage(scheduler_handle);
 
     // Provide access to twitch manager and event sender
-    app.manage(event_tx.clone());
+    app.manage(overlay_tx.clone());
     app.manage(twitch.clone());
 
     // Provide access to script running and
@@ -178,17 +176,17 @@ fn setup(app: &mut App) -> Result<(), Box<dyn Error>> {
         db.clone(),
         twitch.clone(),
         script_handle,
-        event_tx.clone(),
+        overlay_tx.clone(),
         twitch_event_rx,
     ));
 
     // Run HTTP server
     _ = spawn(http::start_http_server(
         db,
-        event_rx,
+        overlay_rx,
         handle.clone(),
         twitch,
-        runtime_app_data,
+        overlay_data,
         storage.clone(),
     ));
 

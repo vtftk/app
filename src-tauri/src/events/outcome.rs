@@ -1,7 +1,4 @@
-use super::{
-    matching::{EventData, EventInputData},
-    ItemWithSoundIds, ItemsWithSounds, OverlayMessage, ThrowItemConfig, ThrowItemMessage,
-};
+use super::matching::{EventData, EventInputData};
 use crate::{
     database::entity::{
         events::{
@@ -12,6 +9,9 @@ use crate::{
         items::{ItemConfig, ItemImageConfig, ItemModel},
         items_sounds::SoundType,
         sounds::{PartialSoundModel, SoundModel},
+    },
+    overlay::{
+        ItemWithSoundIds, ItemsWithSounds, OverlayMessage, ThrowItemConfig, ThrowItemMessage,
     },
     script::runtime::{RuntimeExecutionContext, ScriptExecutorHandle},
     twitch::manager::Twitch,

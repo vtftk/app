@@ -7,7 +7,6 @@ use crate::{
         error::{DynHttpError, HttpResult},
         models::{GetAuthTokenResponse, SetAuthTokenRequest},
     },
-    state::runtime_app_data::{RuntimeAppData, RuntimeAppDataStore, UpdateRuntimeAppData},
     storage::Storage,
 };
 use anyhow::Context;
@@ -29,49 +28,6 @@ pub async fn get_app_data(Extension(db): Extension<DatabaseConnection>) -> HttpR
     let data = AppDataModel::get_or_default(&db).await?;
 
     Ok(Json(data))
-}
-
-/// GET /runtime-app-data
-///
-/// Get the current state of the app at runtime, contains details about
-/// the current state, i.e current model ID
-///
-/// Data stored in runtime app data store is reset when the server restarts
-pub async fn get_runtime_data(
-    Extension(runtime_app_data): Extension<RuntimeAppDataStore>,
-) -> Json<RuntimeAppData> {
-    Json(runtime_app_data.read().await.clone())
-}
-
-/// PUT /runtime-app-data
-///
-/// Sets the current state of the app at runtime
-pub async fn update_runtime_data(
-    Extension(runtime_app_data): Extension<RuntimeAppDataStore>,
-    Json(req): Json<UpdateRuntimeAppData>,
-) -> StatusCode {
-    // Update the stored runtime data
-    runtime_app_data
-        .write(|runtime_app_data| {
-            if let Some(model_id) = req.model_id {
-                runtime_app_data.model_id = model_id;
-            }
-
-            if let Some(vtube_studio_connected) = req.vtube_studio_connected {
-                runtime_app_data.vtube_studio_connected = vtube_studio_connected;
-            }
-
-            if let Some(vtube_studio_auth) = req.vtube_studio_auth {
-                runtime_app_data.vtube_studio_auth = vtube_studio_auth;
-            }
-
-            if let Some(hotkeys) = req.hotkeys {
-                runtime_app_data.hotkeys = hotkeys;
-            }
-        })
-        .await;
-
-    StatusCode::OK
 }
 
 /// GET /content/:folder/:name  
@@ -131,7 +87,7 @@ pub async fn get_defaults_file(
         .context("failed to make response")?)
 }
 
-/// POST /data/set-auth-token
+/// POST /data/vt-auth-token
 ///
 /// Set the current VTube Studio access token for the overlay
 pub async fn handle_set_auth_token(
@@ -159,7 +115,7 @@ pub async fn handle_set_auth_token(
     Ok(Json(()))
 }
 
-/// GET /data/get-auth-token
+/// GET /data/vt-auth-token
 ///
 /// Retrieve the current VTube Studio access token for the overlay
 pub async fn handle_get_auth_token(

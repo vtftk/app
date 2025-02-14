@@ -34,7 +34,7 @@ export type EventSourceData = {
 };
 
 export function createEventSource(data: EventSourceData) {
-  const eventSource = new EventSource(new URL("/events", BACKEND_HTTP));
+  const eventSource = new EventSource(new URL("/overlay/events", BACKEND_HTTP));
 
   eventSource.addEventListener("open", () => {
     console.debug("listening to events");

@@ -48,7 +48,7 @@ export interface SoundModel {
  * @returns Promise resolved when the sound has been sent to the event queue
  */
 export function playSound(src: string, volume: number = 1): Promise<void> {
-  return emitEventMessage({
+  return emitOverlayMessage({
     type: "PlaySound",
     config: {
       id: uuidv4(),
@@ -78,7 +78,7 @@ interface SoundSeq {
  * @returns Promise resolved when the sounds has been sent to the event queue
  */
 export function playSoundSeq(sounds: SoundSeq[]): Promise<void> {
-  return emitEventMessage({
+  return emitOverlayMessage({
     type: "PlaySoundSeq",
     configs: sounds.map((sound) => ({
       id: uuidv4(),
@@ -524,7 +524,7 @@ export function throwItems(
   items: ItemsWithSounds,
   config: ThrowItemConfig,
 ): Promise<void> {
-  return emitEventMessage({
+  return emitOverlayMessage({
     type: "ThrowItem",
     items,
     config,
@@ -538,7 +538,7 @@ export function throwItems(
  * @returns Promise resolved when the hotkey is triggered
  */
 export function triggerVTHotkey(hotkeyID: string): Promise<void> {
-  return emitEventMessage({
+  return emitOverlayMessage({
     type: "TriggerHotkey",
     hotkey_id: hotkeyID,
   });
@@ -555,7 +555,7 @@ export function triggerVTHotkeyByName(
   hotkeyName: string,
   ignoreCase: boolean = false,
 ): Promise<void> {
-  return emitEventMessage({
+  return emitOverlayMessage({
     type: "TriggerHotkeyByName",
     hotkey_name: hotkeyName,
     ignore_case: ignoreCase,
@@ -568,6 +568,6 @@ export function triggerVTHotkeyByName(
  * @param msg
  * @returns
  */
-function emitEventMessage(msg: unknown): Promise<void> {
-  return Deno.core.ops.op_vtftk_emit_event_message(msg);
+function emitOverlayMessage(msg: unknown): Promise<void> {
+  return Deno.core.ops.op_vtftk_emit_overlay_message(msg);
 }

@@ -8,8 +8,7 @@ use crate::{
         event_executions::EventExecutionModel,
         event_logs::EventLogsModel,
     },
-    events::{OverlayMessage, EventMessageChannel},
-    state::runtime_app_data::{RuntimeAppData, RuntimeAppDataStore},
+    overlay::{OverlayData, OverlayDataStore, OverlayMessage, OverlayMessageSender},
     storage::{Storage, StorageFolder},
 };
 use sea_orm::DatabaseConnection;
@@ -19,7 +18,7 @@ use tokio::try_join;
 /// Requests that an active overlay update the current list
 /// of hotkeys from VTube Studio
 #[tauri::command]
-pub fn update_hotkeys(event_sender: tauri::State<'_, EventMessageChannel>) -> CmdResult<()> {
+pub fn update_hotkeys(event_sender: tauri::State<'_, OverlayMessageSender>) -> CmdResult<()> {
     event_sender.send(OverlayMessage::UpdateHotkeys)?;
     Ok(())
 }
@@ -40,8 +39,8 @@ pub async fn get_app_data(db: tauri::State<'_, DatabaseConnection>) -> CmdResult
 /// Obtains the current runtime app data
 #[tauri::command]
 pub async fn get_runtime_app_data(
-    runtime_app_data: tauri::State<'_, RuntimeAppDataStore>,
-) -> CmdResult<RuntimeAppData> {
+    runtime_app_data: tauri::State<'_, OverlayDataStore>,
+) -> CmdResult<OverlayData> {
     Ok(runtime_app_data.read().await.clone())
 }
 
@@ -50,7 +49,7 @@ pub async fn get_runtime_app_data(
 pub async fn set_app_data(
     app_data: AppData,
     db: tauri::State<'_, DatabaseConnection>,
-    event_sender: tauri::State<'_, EventMessageChannel>,
+    event_sender: tauri::State<'_, OverlayMessageSender>,
 ) -> CmdResult<bool> {
     let model = AppDataModel::set(db.inner(), app_data).await?;
 

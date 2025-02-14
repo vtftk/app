@@ -1,8 +1,6 @@
 use crate::{
-    events::{
-        matching::{EventData, EventInputData},
-        EventMessageChannel,
-    },
+    events::matching::{EventData, EventInputData},
+    overlay::OverlayMessageSender,
     script::ops::{
         core::op_uuid_v4,
         http::op_http_request,
@@ -10,8 +8,8 @@ use crate::{
         logging::op_log,
         twitch::op_twitch_get_credentials,
         vtftk::{
-            op_vtftk_get_items_by_ids, op_vtftk_get_items_by_names, op_vtftk_get_sounds_by_ids,
-            op_vtftk_get_sounds_by_names,
+            op_vtftk_emit_overlay_message, op_vtftk_get_items_by_ids, op_vtftk_get_items_by_names,
+            op_vtftk_get_sounds_by_ids, op_vtftk_get_sounds_by_names,
         },
     },
     twitch::manager::Twitch,
@@ -35,8 +33,8 @@ use uuid::Uuid;
 use super::module_loader::AppModuleLoader;
 
 pub struct ScriptRuntimeData {
-    /// Sender handle for submitting event messages
-    pub event_sender: EventMessageChannel,
+    /// Sender handle for sending messages to the overlay
+    pub overlay_sender: OverlayMessageSender,
 
     /// Access to the database
     pub db: DatabaseConnection,
@@ -66,6 +64,8 @@ deno_core::extension!(
         // VTFTK Items
         op_vtftk_get_items_by_names,
         op_vtftk_get_items_by_ids,
+        // VTFTK Overlay
+        op_vtftk_emit_overlay_message,
     ],
     options = {
         data: ScriptRuntimeData

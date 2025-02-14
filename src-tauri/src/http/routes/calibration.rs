@@ -15,7 +15,7 @@ use crate::{
     },
 };
 
-/// GET /calibration-data
+/// GET /calibration
 ///
 /// Requests the current calibration data for all models
 pub async fn handle_calibration_data(
