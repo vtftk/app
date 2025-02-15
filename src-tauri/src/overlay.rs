@@ -1,6 +1,6 @@
 use crate::{
     database::entity::{app_data::AppData, items::ItemModel, sounds::PartialSoundModel},
-    http::models::calibration::CalibrationStep,
+    http::models::CalibrationStep,
 };
 use axum::response::sse::Event;
 use futures::Stream;

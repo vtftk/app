@@ -1,9 +1,3 @@
-use anyhow::Context;
-use axum::{Extension, Json};
-use log::info;
-use sea_orm::DatabaseConnection;
-use tauri::{AppHandle, Emitter};
-
 use crate::{
     database::entity::{
         model_data::{CreateModelData, ModelCalibration, ModelDataModel},
@@ -11,9 +5,14 @@ use crate::{
     },
     http::{
         error::HttpResult,
-        models::calibration::{CalibrationProgressRes, CalibrationStepData},
+        models::{CalibrationProgressRes, CalibrationStepData},
     },
 };
+use anyhow::Context;
+use axum::{Extension, Json};
+use log::info;
+use sea_orm::DatabaseConnection;
+use tauri::{AppHandle, Emitter};
 
 /// GET /calibration
 ///
