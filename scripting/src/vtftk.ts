@@ -207,7 +207,7 @@ export interface ItemModel {
   /**
    * Configuration for the item image
    */
-  image: ItemModelImage;
+  image: ItemImageConfig;
   /**
    * Order of the item within the UI
    */
@@ -222,10 +222,15 @@ export interface ItemModel {
   impact_sound_ids: string[];
 }
 
+export interface ItemConfig {
+  image: ItemImageConfig;
+  windup: ItemWindupConfig;
+}
+
 /**
  * Item image config
  */
-export interface ItemModelImage {
+export interface ItemImageConfig {
   /**
    * URL for the image source
    */
@@ -242,6 +247,11 @@ export interface ItemModelImage {
    * Whether to pixelate the image when scaling (Use to make pixel art scale properly)
    */
   pixelate: boolean;
+}
+
+export interface ItemWindupConfig {
+  enabled: boolean;
+  duration: number;
 }
 
 export interface ItemsWithSounds {

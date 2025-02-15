@@ -1,6 +1,6 @@
 use super::CmdResult;
 use crate::events::outcome::resolve_items;
-use crate::overlay::{OverlayMessage, OverlayMessageSender, ThrowItemConfig, ThrowItemMessage};
+use crate::overlay::{OverlayMessage, OverlayMessageSender, ThrowItemConfig};
 use anyhow::Context;
 use log::debug;
 use sea_orm::DatabaseConnection;
@@ -24,12 +24,12 @@ pub async fn test_throw(
     let db = db.inner();
     let items = resolve_items(db, &item_ids).await?;
 
-    event_sender.send(OverlayMessage::ThrowItem(ThrowItemMessage {
+    event_sender.send(OverlayMessage::ThrowItem {
         items,
         config: ThrowItemConfig::All {
             amount: amount.unwrap_or(1),
         },
-    }))?;
+    })?;
 
     Ok(())
 }
@@ -47,14 +47,14 @@ pub async fn test_throw_barrage(
     let db = db.inner();
     let items = resolve_items(db, &item_ids).await?;
 
-    event_sender.send(OverlayMessage::ThrowItem(ThrowItemMessage {
+    event_sender.send(OverlayMessage::ThrowItem {
         items,
         config: ThrowItemConfig::Barrage {
             amount_per_throw,
             amount,
             frequency,
         },
-    }))?;
+    })?;
 
     Ok(())
 }

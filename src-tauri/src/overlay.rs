@@ -1,5 +1,5 @@
 use crate::{
-    database::entity::{app_data::AppData, items::ItemModel, sounds::PartialSoundModel},
+    database::entity::{app_data::AppData, items::ItemConfig, sounds::PartialSoundModel},
     http::models::CalibrationStep,
 };
 use axum::response::sse::Event;
@@ -25,25 +25,21 @@ pub const OVERLAY_PAGE: &str = include_str!("../../overlay/dist/index.html");
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ItemsWithSounds {
     /// All the referenced items
-    pub items: Vec<ItemWithSoundIds>,
+    pub items: Vec<PartialItemModel>,
     /// All the referenced sounds
     pub sounds: Vec<PartialSoundModel>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ItemWithSoundIds {
-    #[serde(flatten)]
-    pub item: ItemModel,
+pub struct PartialItemModel {
+    /// Unique ID for the item
+    pub id: Uuid,
+    /// Image to use for the throwable item
+    pub config: ItemConfig,
+    /// IDs of impact sounds used by this item
     pub impact_sound_ids: Vec<Uuid>,
+    /// IDs of windup sounds used by this item
     pub windup_sound_ids: Vec<Uuid>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ThrowItemMessage {
-    /// Items to throw
-    pub items: ItemsWithSounds,
-    /// Type of throw
-    pub config: ThrowItemConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,7 +70,12 @@ pub enum OverlayMessage {
     },
 
     /// Throw item
-    ThrowItem(ThrowItemMessage),
+    ThrowItem {
+        /// Items to throw
+        items: ItemsWithSounds,
+        /// Type of throw
+        config: ThrowItemConfig,
+    },
 
     /// Request the latest set of vtube studio hotkeys
     UpdateHotkeys,

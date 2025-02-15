@@ -1,6 +1,7 @@
 import type { Uuid } from "./appData";
 
 export type ItemId = Uuid;
+export type SoundId = Uuid;
 
 export type ItemImageConfig = {
   src: string;
@@ -14,24 +15,7 @@ export type ItemWindupConfig = {
   duration: number;
 };
 
-export type Item = {
-  id: ItemId;
-  name: string;
-  config: ItemConfig;
-  order: number;
-};
-
 export type ItemConfig = {
   image: ItemImageConfig;
   windup: ItemWindupConfig;
-};
-
-export type SoundId = Uuid;
-
-export type Sound = {
-  id: SoundId;
-  name: string;
-  src: string;
-  volume: number;
-  order: number;
 };

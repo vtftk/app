@@ -1,8 +1,8 @@
 import { flinch } from "./flinch";
 import { VTubeStudioWebSocket } from "./socket";
+import { sleep, LoadedSoundData } from "../utils/async";
 import { randomBool, randomRange, percentRange } from "../utils/math";
 import { LARGEST_MODEL_SIZE, TOTAL_MODEL_SIZE_RANGE } from "../constants";
-import { sleep, loadAudio, loadImage, LoadedSoundData } from "../utils/async";
 import { ModelPosition, ModelParameters, requestCurrentModel } from "./model";
 import {
   PhysicsEngine,
@@ -10,7 +10,6 @@ import {
   createPhysicsEngine,
 } from "./physics";
 import {
-  Sound,
   MinMax,
   AppData,
   ModelId,
@@ -30,33 +29,6 @@ export function setPhysicsEngineConfig(config: PhysicsEngineConfig) {
     physicsEngine.stop();
     physicsEngine = createPhysicsEngine(config);
   }
-}
-
-/**
- * Loads the resources a throwable depends on such as
- * the image itself and optionally an impact audio
- *
- * @param imageConfig The image configuration
- * @param soundConfig The impact sound configuration
- * @returns The loaded resources
- */
-export async function loadThrowableResources(
-  imageConfig: ItemImageConfig,
-  soundConfig: Sound | null,
-): Promise<{ image: HTMLImageElement | null; audio: HTMLAudioElement | null }> {
-  // Load the image and audio if present
-  const [imageResult, audioResult] = await Promise.allSettled([
-    // Load the image
-    loadImage(imageConfig.src),
-
-    // Load the sound
-    soundConfig ? loadAudio(soundConfig.src) : Promise.reject(),
-  ]);
-
-  return {
-    image: imageResult.status === "fulfilled" ? imageResult.value : null,
-    audio: audioResult.status === "fulfilled" ? audioResult.value : null,
-  };
 }
 
 /**

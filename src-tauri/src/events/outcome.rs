@@ -10,14 +10,11 @@ use crate::{
         items_sounds::SoundType,
         sounds::{PartialSoundModel, SoundModel},
     },
-    overlay::{
-        ItemWithSoundIds, ItemsWithSounds, OverlayMessage, ThrowItemConfig, ThrowItemMessage,
-    },
+    overlay::{ItemsWithSounds, OverlayMessage, PartialItemModel, ThrowItemConfig},
     script::runtime::{RuntimeExecutionContext, ScriptExecutorHandle},
     twitch::manager::Twitch,
 };
 use anyhow::{anyhow, Context};
-use chrono::Utc;
 use sea_orm::DatabaseConnection;
 use std::collections::HashSet;
 use twitch_api::types::SubscriptionTier;
@@ -239,28 +236,19 @@ async fn throw_channel_emotes_outcome(
 
     let items = emotes
         .into_iter()
-        .map(|emote| {
-            let item = ItemModel {
-                id: Uuid::new_v4(),
-                name: "<builtin-bits>".to_string(),
-                config: ItemConfig {
-                    image: ItemImageConfig {
-                        src: emote.images.url_4x,
-                        pixelate: false,
-                        scale: 1.0,
-                        weight: 1.0,
-                    },
-                    windup: Default::default(),
+        .map(|emote| PartialItemModel {
+            id: Uuid::new_v4(),
+            config: ItemConfig {
+                image: ItemImageConfig {
+                    src: emote.images.url_4x,
+                    pixelate: false,
+                    scale: 1.0,
+                    weight: 1.0,
                 },
-                order: 0,
-                created_at: Utc::now(),
-            };
-
-            ItemWithSoundIds {
-                item,
-                impact_sound_ids: impact_sound_ids.clone(),
-                windup_sound_ids: Vec::new(),
-            }
+                windup: Default::default(),
+            },
+            impact_sound_ids: impact_sound_ids.clone(),
+            windup_sound_ids: Vec::new(),
         })
         .collect();
 
@@ -310,10 +298,10 @@ fn create_throwable_message(
                 amount
             };
 
-            Ok(OverlayMessage::ThrowItem(ThrowItemMessage {
+            Ok(OverlayMessage::ThrowItem {
                 items,
                 config: ThrowItemConfig::All { amount },
-            }))
+            })
         }
         ThrowableAmountData::Barrage {
             amount_per_throw,
@@ -336,14 +324,14 @@ fn create_throwable_message(
                 amount
             };
 
-            Ok(OverlayMessage::ThrowItem(ThrowItemMessage {
+            Ok(OverlayMessage::ThrowItem {
                 items,
                 config: ThrowItemConfig::Barrage {
                     amount_per_throw,
                     amount,
                     frequency,
                 },
-            }))
+            })
         }
     }
 }
@@ -384,7 +372,7 @@ pub async fn resolve_items(
 ) -> anyhow::Result<ItemsWithSounds> {
     let mut sound_ids = HashSet::new();
 
-    let items: Vec<ItemWithSoundIds> = ItemModel::get_by_ids_with_sounds(db, item_ids)
+    let items: Vec<PartialItemModel> = ItemModel::get_by_ids_with_sounds(db, item_ids)
         .await?
         .into_iter()
         .map(|(item, sounds)| {
@@ -400,8 +388,9 @@ pub async fn resolve_items(
                 }
             }
 
-            ItemWithSoundIds {
-                item,
+            PartialItemModel {
+                id: item.id,
+                config: item.config,
                 impact_sound_ids,
                 windup_sound_ids,
             }
@@ -465,9 +454,8 @@ pub fn create_default_bit_throwable(amount: i64) -> ItemsWithSounds {
     let impact_sounds: Vec<PartialSoundModel> = create_default_impact_sounds();
     let impact_sound_ids: Vec<Uuid> = impact_sounds.iter().map(|sound| sound.id).collect();
 
-    let item = ItemModel {
+    let item = PartialItemModel {
         id: Uuid::new_v4(),
-        name: "<builtin-bits>".to_string(),
         config: ItemConfig {
             image: ItemImageConfig {
                 src: bit_src,
@@ -477,12 +465,6 @@ pub fn create_default_bit_throwable(amount: i64) -> ItemsWithSounds {
             },
             windup: Default::default(),
         },
-        order: 0,
-        created_at: Utc::now(),
-    };
-
-    let item = ItemWithSoundIds {
-        item,
         impact_sound_ids,
         windup_sound_ids: Vec::new(),
     };

@@ -1,7 +1,5 @@
-import { Item } from "$shared/dataV2";
-
 import getBackendURL from "./url";
-import { PartialSoundModel } from "../vtftk/types";
+import { PartialItemModel, PartialSoundModel } from "../vtftk/types";
 
 export async function sleep(duration: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, duration));
@@ -61,7 +59,9 @@ export type LoadedSoundData = {
   sound: HTMLAudioElement;
 };
 
-export async function loadItems(items: Item[]): Promise<LoadedItemMap> {
+export async function loadItems(
+  items: PartialItemModel[],
+): Promise<LoadedItemMap> {
   const results = await Promise.allSettled(
     items.map(async (item) => ({
       id: item.id,

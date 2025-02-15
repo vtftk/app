@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     database::entity::{items::ItemModel, items_sounds::SoundType, sounds::SoundModel},
-    overlay::{ItemWithSoundIds, OverlayMessage},
+    overlay::{OverlayMessage, PartialItemModel},
     script::runtime::ScriptRuntimeData,
 };
 use anyhow::Context;
@@ -36,14 +36,14 @@ pub async fn op_vtftk_get_items_by_names(
     state: Rc<RefCell<OpState>>,
     #[serde] names: Vec<String>,
     ignore_case: bool,
-) -> anyhow::Result<Vec<ItemWithSoundIds>> {
+) -> anyhow::Result<Vec<PartialItemModel>> {
     let db = {
         let state = state.borrow();
         let data = state.borrow::<ScriptRuntimeData>();
         data.db.clone()
     };
 
-    let items: Vec<ItemWithSoundIds> =
+    let items: Vec<PartialItemModel> =
         ItemModel::get_by_names_with_sounds(&db, &names, ignore_case)
             .await?
             .into_iter()
@@ -58,8 +58,9 @@ pub async fn op_vtftk_get_items_by_names(
                     }
                 }
 
-                ItemWithSoundIds {
-                    item,
+                PartialItemModel {
+                    id: item.id,
+                    config: item.config,
                     impact_sound_ids,
                     windup_sound_ids,
                 }
@@ -75,14 +76,14 @@ pub async fn op_vtftk_get_items_by_names(
 pub async fn op_vtftk_get_items_by_ids(
     state: Rc<RefCell<OpState>>,
     #[serde] ids: Vec<Uuid>,
-) -> anyhow::Result<Vec<ItemWithSoundIds>> {
+) -> anyhow::Result<Vec<PartialItemModel>> {
     let db = {
         let state = state.borrow();
         let data = state.borrow::<ScriptRuntimeData>();
         data.db.clone()
     };
 
-    let items: Vec<ItemWithSoundIds> = ItemModel::get_by_ids_with_sounds(&db, &ids)
+    let items: Vec<PartialItemModel> = ItemModel::get_by_ids_with_sounds(&db, &ids)
         .await?
         .into_iter()
         .map(|(item, sounds)| {
@@ -96,8 +97,9 @@ pub async fn op_vtftk_get_items_by_ids(
                 }
             }
 
-            ItemWithSoundIds {
-                item,
+            PartialItemModel {
+                id: item.id,
+                config: item.config,
                 impact_sound_ids,
                 windup_sound_ids,
             }

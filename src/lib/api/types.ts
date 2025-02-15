@@ -3,9 +3,24 @@ export * from "$shared/appData";
 export * from "$shared/runtimeAppData";
 
 import type { Uuid, MinMax } from "$shared/appData";
-import type { Item, ItemId, SoundId, ItemConfig } from "$shared/dataV2";
+import type { ItemId, SoundId, ItemConfig } from "$shared/dataV2";
 
 type Option<T> = T | null;
+
+export type Sound = {
+  id: SoundId;
+  name: string;
+  src: string;
+  volume: number;
+  order: number;
+};
+
+export type Item = {
+  id: ItemId;
+  name: string;
+  config: ItemConfig;
+  order: number;
+};
 
 export type ItemWithImpactSounds = Item & {
   impact_sounds: SoundId[];

@@ -1,4 +1,4 @@
-import { Item, SoundId } from "$shared/dataV2";
+import { ItemId, SoundId, ItemConfig } from "$shared/dataV2";
 
 export * from "$shared/dataV2";
 export * from "$shared/appData";
@@ -27,7 +27,12 @@ export type ThrowItemConfig =
       frequency: number;
     };
 
-export type ItemWithSoundIds = Item & {
+export type PartialItemModel = {
+  id: ItemId;
+  config: ItemConfig;
+};
+
+export type ItemWithSoundIds = PartialItemModel & {
   impact_sound_ids: SoundId[];
   windup_sound_ids: SoundId[];
 };
