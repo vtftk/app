@@ -18,7 +18,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use uuid::Uuid;
 
 /// Embedded overlay HTML browser page
-pub const OVERLAY_PAGE: &str = include_str!("../../../overlay/dist/index.html");
+pub const OVERLAY_PAGE: &str = include_str!("../../overlay/dist/index.html");
 
 /// Collection of items along with the resolved impact
 /// sounds for the items

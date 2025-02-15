@@ -49,26 +49,26 @@ pub async fn handle_sse(
 ///
 /// Partially the current overlay data
 pub async fn update_overlay_data(
-    Extension(runtime_app_data): Extension<OverlayDataStore>,
+    Extension(overlay_data): Extension<OverlayDataStore>,
     Json(req): Json<UpdateRuntimeAppData>,
 ) -> StatusCode {
     // Update the stored runtime data
-    runtime_app_data
-        .write(|runtime_app_data| {
+    overlay_data
+        .write(|overlay_data| {
             if let Some(model_id) = req.model_id {
-                runtime_app_data.model_id = model_id;
+                overlay_data.model_id = model_id;
             }
 
             if let Some(vtube_studio_connected) = req.vtube_studio_connected {
-                runtime_app_data.vtube_studio_connected = vtube_studio_connected;
+                overlay_data.vtube_studio_connected = vtube_studio_connected;
             }
 
             if let Some(vtube_studio_auth) = req.vtube_studio_auth {
-                runtime_app_data.vtube_studio_auth = vtube_studio_auth;
+                overlay_data.vtube_studio_auth = vtube_studio_auth;
             }
 
             if let Some(hotkeys) = req.hotkeys {
-                runtime_app_data.hotkeys = hotkeys;
+                overlay_data.hotkeys = hotkeys;
             }
         })
         .await;
