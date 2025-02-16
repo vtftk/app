@@ -11,6 +11,7 @@ type FlinchReturn = {
 };
 
 const FLINCH_RETURN_ANIMATE_INTERVAL = 1000 / 60;
+
 let currentFlinchReturn: FlinchReturn | undefined;
 
 type FlinchConfig = {

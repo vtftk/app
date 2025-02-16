@@ -4,8 +4,13 @@ import { beginCalibrationStep } from "./calibration";
 import { CalibrationStep } from "./calibration-types";
 import { VTubeStudioWebSocket } from "../vtube-studio/socket";
 import { triggerHotkey, requestHotkeys } from "../vtube-studio/hotkeys";
-import { ModelParameters, requestMoveModel } from "../vtube-studio/model";
 import { throwItem, setPhysicsEngineConfig } from "../vtube-studio/throw-item";
+import {
+  ModelPosition,
+  ModelParameters,
+  requestMoveModel,
+  requestCurrentModel,
+} from "../vtube-studio/model";
 import {
   loadAudio,
   loadItems,
@@ -283,8 +288,8 @@ async function onThrowItemEvent(
     );
   } else if (config.type === ThrowItemConfigType.Barrage) {
     await executeInterval(
-      async () => {
-        return throwItemMany(
+      () =>
+        throwItemMany(
           vtSocket,
           overlayConfig,
           modelCalibration,
@@ -293,34 +298,93 @@ async function onThrowItemEvent(
           loadedItems,
           loadedSounds,
           config.amount_per_throw,
-        );
-      },
+        ),
       config.frequency,
       config.amount,
     );
   }
 }
 
-function pickRandomSound(
-  soundIds: string[],
-  sounds: LoadedSoundMap,
-  clone: boolean = false,
+async function throwItemMany(
+  socket: VTubeStudioWebSocket,
+  overlayConfig: OverlayConfig,
+  modelCalibration: Map<ModelId, ModelCalibration>,
+  modelParameters: ModelParameters,
+
+  items: ItemWithSoundIds[],
+  loadedItems: LoadedItemMap,
+  loadedSounds: LoadedSoundMap,
+  amount: number,
 ) {
-  if (soundIds.length < 1) return null;
+  // Request the model position once for bulk throwing (To prevent spamming VTStudio)
+  const { modelID, modelPosition } = await requestCurrentModel(socket);
+  const modelData = modelCalibration.get(modelID);
 
-  const randomSoundId = arrayRandom(soundIds);
-  const audio = sounds.get(randomSoundId);
+  // Model is not calibrated (or just no model)
+  if (modelData === undefined) return;
 
-  if (audio) {
-    return {
-      config: audio.config,
-      sound: clone
-        ? (audio.sound.cloneNode() as HTMLAudioElement)
-        : audio.sound,
-    };
+  if (amount === 1) {
+    return throwRandomItem(
+      socket,
+      overlayConfig,
+      modelParameters,
+      items,
+      loadedItems,
+      loadedSounds,
+      modelPosition,
+      modelData,
+    );
   }
 
-  return null;
+  return Promise.all(
+    Array.from(Array(amount)).map(() =>
+      throwRandomItem(
+        socket,
+        overlayConfig,
+        modelParameters,
+        items,
+        loadedItems,
+        loadedSounds,
+        modelPosition,
+        modelData,
+      ),
+    ),
+  );
+}
+
+function throwRandomItem(
+  socket: VTubeStudioWebSocket,
+  overlayConfig: OverlayConfig,
+  modelParameters: ModelParameters,
+
+  items: ItemWithSoundIds[],
+  loadedItems: LoadedItemMap,
+  loadedSounds: LoadedSoundMap,
+
+  modelPosition: ModelPosition,
+  modelData: ModelCalibration,
+): Promise<void> {
+  const item = pickRandomItem(items, loadedItems);
+
+  // No item found
+  if (item === null) return Promise.resolve();
+
+  const { impact_sound_ids, windup_sound_ids, config } = item.config;
+
+  const impactAudio = pickRandomSound(impact_sound_ids, loadedSounds);
+  const windupAudio = pickRandomSound(windup_sound_ids, loadedSounds);
+
+  return throwItem(
+    socket,
+    config,
+    overlayConfig,
+    item.image,
+    impactAudio,
+    windupAudio,
+    modelParameters,
+    modelPosition,
+    modelData,
+  );
 }
 
 function pickRandomItem(items: ItemWithSoundIds[], images: LoadedItemMap) {
@@ -345,78 +409,24 @@ function pickRandomItem(items: ItemWithSoundIds[], images: LoadedItemMap) {
   return null;
 }
 
-function throwRandomItem(
-  socket: VTubeStudioWebSocket,
-  overlayConfig: OverlayConfig,
-  modelCalibration: Map<ModelId, ModelCalibration>,
-  modelParameters: ModelParameters,
-
-  items: ItemWithSoundIds[],
-  loadedItems: LoadedItemMap,
-  loadedSounds: LoadedSoundMap,
-): Promise<void> {
-  const item = pickRandomItem(items, loadedItems);
-
-  // No item found
-  if (item === null) return Promise.resolve();
-
-  const impactAudio = pickRandomSound(
-    item.config.impact_sound_ids,
-    loadedSounds,
-  );
-
-  const windupAudio = pickRandomSound(
-    item.config.windup_sound_ids,
-    loadedSounds,
-  );
-
-  return throwItem(
-    socket,
-    overlayConfig,
-    modelCalibration,
-
-    modelParameters,
-    item.config,
-    item.image,
-    impactAudio,
-    windupAudio,
-  );
-}
-
-async function throwItemMany(
-  socket: VTubeStudioWebSocket,
-  overlayConfig: OverlayConfig,
-  modelCalibration: Map<ModelId, ModelCalibration>,
-  modelParameters: ModelParameters,
-
-  items: ItemWithSoundIds[],
-  loadedItems: LoadedItemMap,
-  loadedSounds: LoadedSoundMap,
-  amount: number,
+function pickRandomSound(
+  soundIds: string[],
+  sounds: LoadedSoundMap,
+  clone: boolean = false,
 ) {
-  if (amount === 1) {
-    return throwRandomItem(
-      socket,
-      overlayConfig,
-      modelCalibration,
-      modelParameters,
-      items,
-      loadedItems,
-      loadedSounds,
-    );
+  if (soundIds.length < 1) return null;
+
+  const randomSoundId = arrayRandom(soundIds);
+  const audio = sounds.get(randomSoundId);
+
+  if (audio) {
+    return {
+      config: audio.config,
+      sound: clone
+        ? (audio.sound.cloneNode() as HTMLAudioElement)
+        : audio.sound,
+    };
   }
 
-  return Promise.all(
-    Array.from(Array(amount)).map(() =>
-      throwRandomItem(
-        socket,
-        overlayConfig,
-        modelCalibration,
-        modelParameters,
-        items,
-        loadedItems,
-        loadedSounds,
-      ),
-    ),
-  );
+  return null;
 }

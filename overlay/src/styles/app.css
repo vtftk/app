@@ -129,6 +129,13 @@ body {
   padding: 0;
 }
 
+/* Thrown root container */
+.t-root {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+}
+
 .thrown {
   position: absolute;
 }

@@ -1,22 +1,23 @@
 import { flinch } from "./flinch";
+import playSound from "./playSound";
 import { VTubeStudioWebSocket } from "./socket";
 import { sleep, LoadedSoundData } from "../utils/async";
+import { ModelPosition, ModelParameters } from "./model";
 import { randomBool, randomRange, percentRange } from "../utils/math";
 import { LARGEST_MODEL_SIZE, TOTAL_MODEL_SIZE_RANGE } from "../constants";
-import { ModelPosition, ModelParameters, requestCurrentModel } from "./model";
 import {
   PhysicsEngine,
   PhysicsEngineConfig,
   createPhysicsEngine,
 } from "./physics";
 import {
-  MinMax,
-  ModelId,
+  ItemConfig,
   OverlayConfig,
+  PhysicsConfig,
   ThrowDirection,
   ItemImageConfig,
   ModelCalibration,
-  ItemWithSoundIds,
+  ThrowablesConfig,
 } from "../vtftk/types";
 
 const HORIZONTAL_PHYSICS_SCALE = 3;
@@ -31,117 +32,79 @@ export function setPhysicsEngineConfig(config: PhysicsEngineConfig) {
   }
 }
 
-/**
- * Throws an item
- *
- * @param socket Socket for getting model position and sending impact flinches to VTube studio
- * @param overlayConfig Global app data settings
- * @param modelCalibration Calibration data for available models
- * @param modelParameters Parameters for the current model
- * @param config Configuration for the thrown item
- * @param image Image element to use for the thrown item
- * @param impactAudio Audio element to play when the item impacts the target
- * @param windupAudio Audio element to play when the item is winding up
- * @returns Promise that completes after the item has been completely thrown and removed
- */
 export async function throwItem(
+  // Socket for sending messages to vtube studio
   socket: VTubeStudioWebSocket,
+
+  // Configuration
+  itemConfig: ItemConfig,
   overlayConfig: OverlayConfig,
-  modelCalibration: Map<ModelId, ModelCalibration>,
-  modelParameters: ModelParameters,
-  config: ItemWithSoundIds,
+
+  // Image
   image: HTMLImageElement,
+
+  // Sounds
   impactAudio: LoadedSoundData | null,
   windupAudio: LoadedSoundData | null,
+
+  // Model data
+  modelParameters: ModelParameters,
+  modelPosition: ModelPosition,
+  modelData: ModelCalibration,
 ) {
-  const { modelID, modelPosition } = await requestCurrentModel(socket);
-
-  const modelData = modelCalibration.get(modelID);
-
-  // Model is not yet calibrated
-  if (modelData === undefined) return;
-
   // Model is not available
   if (!modelPosition) return;
 
-  const { throwables_config: throwables } = overlayConfig;
+  const { throwables_config, physics_config } = overlayConfig;
 
   // Determine scale of the model relative to the calibrated minimum and maximum sizes
   const modelScale =
     (modelPosition.size + LARGEST_MODEL_SIZE) / TOTAL_MODEL_SIZE_RANGE;
 
   const leftSide: boolean = isRandomDirectionLeft(
-    throwables.direction,
+    throwables_config.direction,
     percentRange(modelScale, modelData.x.min, modelData.x.max),
   );
 
-  let angle = randomRange(
-    throwables.throw_angle.min,
-    throwables.throw_angle.max,
-  );
+  const angle =
+    randomRange(
+      throwables_config.throw_angle.min,
+      throwables_config.throw_angle.max,
+    ) *
+    // Flip angle when coming from the right side
+    (leftSide ? 1 : -1);
 
-  // Flip the angle when coming from the right side
-  if (!leftSide) angle = -angle;
+  const { windup } = itemConfig;
 
-  const itemScale = percentRange(
-    modelScale,
-    throwables.item_scale.min,
-    throwables.item_scale.max,
-  );
-
-  const { image: imageConfig, windup } = config.config;
-
-  if (windup.enabled) {
+  if (windup.enabled && windupAudio !== null) {
     // Play the windup sound
-    if (windupAudio !== null) {
-      try {
-        windupAudio.sound.volume =
-          overlayConfig.sounds_config.global_volume * windupAudio.config.volume;
-        windupAudio.sound.play();
-      } catch (err) {
-        console.error("failed to play windup audio", err);
-      }
-    }
+    playSound(windupAudio, overlayConfig.sounds_config);
 
     await sleep(windup.duration);
   }
 
-  const scaledImageWidth = image.width * imageConfig.scale * itemScale;
-  const scaledImageHeight = image.height * imageConfig.scale * itemScale;
-
   const thrown = createThrownImage(
-    imageConfig,
+    itemConfig.image,
     image,
-    scaledImageWidth,
-    scaledImageHeight,
+    modelScale,
     angle,
-    throwables.spin_speed,
+    throwables_config,
   );
-
-  const movement = createMovementContainer(
-    leftSide,
-    throwables.duration,
-    throwables.impact_delay,
-  );
-
+  const movement = createMovementContainer(thrown, leftSide, throwables_config);
   const pivot = createPivotContainer(
-    scaledImageWidth,
-    scaledImageHeight,
+    movement,
     modelPosition,
     modelData,
     modelScale,
     angle,
   );
+  const root = createRootContainer(pivot, modelPosition);
 
-  const root = createRootContainer(modelPosition);
-
-  movement.appendChild(thrown);
-  pivot.appendChild(movement);
-  root.appendChild(pivot);
   document.body.appendChild(root);
 
   // Impact is encountered half way through the animation
-  const impactTimeout = throwables.duration / 2 + throwables.impact_delay;
+  const impactTimeout =
+    throwables_config.duration / 2 + throwables_config.impact_delay;
 
   // Wait for the impact to occur
   await sleep(impactTimeout);
@@ -151,30 +114,19 @@ export async function throwItem(
     socket,
     overlayConfig,
     modelParameters,
-    config,
+    itemConfig,
     impactAudio,
     angle,
     leftSide,
   );
 
   // No physics to apply
-  if (!overlayConfig.physics_config.enabled) {
+  if (!physics_config.enabled) {
     // Wait remaining duration before removing
-    await sleep(throwables.duration / 2);
+    await sleep(throwables_config.duration / 2);
     // Remove after complete
     document.body.removeChild(root);
-
     return;
-  }
-
-  // Initialize the physics engine
-  if (physicsEngine === null) {
-    const { fps, gravity_multiplier } = overlayConfig.physics_config;
-
-    physicsEngine = createPhysicsEngine({
-      fps: fps,
-      gravityMultiplier: gravity_multiplier,
-    });
   }
 
   // Strip animations and transforms before applying physics
@@ -182,8 +134,28 @@ export async function throwItem(
   pivot.style.transform = "";
   thrown.style.transform = "";
 
-  const { horizontal_multiplier, vertical_multiplier } =
-    overlayConfig.physics_config;
+  // Convert the item into a physics object
+  throwItemPhysics(physics_config, movement, root, leftSide, angle);
+}
+
+function throwItemPhysics(
+  physics_config: PhysicsConfig,
+  movement: HTMLDivElement,
+  root: HTMLDivElement,
+  leftSide: boolean,
+  angle: number,
+) {
+  // Initialize the physics engine
+  if (physicsEngine === null) {
+    const { fps, gravity_multiplier } = physics_config;
+
+    physicsEngine = createPhysicsEngine({
+      fps: fps,
+      gravityMultiplier: gravity_multiplier,
+    });
+  }
+
+  const { horizontal_multiplier, vertical_multiplier } = physics_config;
 
   const randomVelocity = Math.random();
 
@@ -248,7 +220,7 @@ function isRandomDirectionLeft(
  * @param socket Socket for sending impact flinches to VTube studio
  * @param overlayConfig Global app data settings
  * @param modelParameters Parameters for the current model
- * @param config Configuration for the thrown item
+ * @param itemConfig Configuration for the thrown item
  * @param impactAudio Audio element to play when the item impacts the target
  * @param angle Angle the item was thrown at
  * @param leftSide Whether the item is coming from the left side
@@ -257,24 +229,17 @@ function handleThrowableImpact(
   socket: VTubeStudioWebSocket,
   overlayConfig: OverlayConfig,
   modelParameters: ModelParameters,
-  config: ItemWithSoundIds,
+  itemConfig: ItemConfig,
   impactAudio: LoadedSoundData | null,
   angle: number,
   leftSide: boolean,
 ) {
   // Play the impact sound
   if (impactAudio !== null) {
-    try {
-      impactAudio.sound.volume =
-        overlayConfig.sounds_config.global_volume * impactAudio.config.volume;
-
-      impactAudio.sound.play();
-    } catch (err) {
-      console.error("failed to play audio", err);
-    }
+    playSound(impactAudio, overlayConfig.sounds_config);
   }
 
-  const { image } = config.config;
+  const { image } = itemConfig;
 
   // Make the VTuber model flinch from the impact
   flinch(socket, modelParameters, {
@@ -288,66 +253,71 @@ function handleThrowableImpact(
   // TODO: IMPACT DECAL
 }
 
-function createRootContainer(modelPosition: ModelPosition) {
-  const elm = document.createElement("div");
-  elm.classList.add("thrown");
-
-  const style = elm.style;
-
-  const originXPercent = ((modelPosition.positionX + 1) / 2) * 100;
-  const originYPercent = (1 - (modelPosition.positionY + 1) / 2) * 100;
-
-  style.width = "100%";
-  style.height = "100%";
-  style.transformOrigin = `${originXPercent}% ${originYPercent}%`;
-
-  return elm;
-}
-
-/**
- * Creates a throwable image element, applies rotation and other
- * image styling
- *
- * @param config Configuration for the image
- * @param image The underlying image element itself
- * @param scaledWidth The scaled width of the image
- * @param scaledHeight The scaled height of the image
- * @param angle The angle of the image
- * @param spinSpeed Speed the image should spin at
- * @returns The image element
- */
 function createThrownImage(
-  config: ItemImageConfig,
+  imageConfig: ItemImageConfig,
   image: HTMLImageElement,
-
-  scaledWidth: number,
-  scaledHeight: number,
-
+  modelScale: number,
   angle: number,
-  spinSpeed: MinMax,
+  throwables_config: ThrowablesConfig,
 ): HTMLImageElement {
+  const { item_scale, spin_speed } = throwables_config;
+  const itemScale = percentRange(modelScale, item_scale.min, item_scale.max);
+
+  const scaledWidth = image.width * imageConfig.scale * itemScale;
+  const scaledHeight = image.height * imageConfig.scale * itemScale;
+
   const elm = image.cloneNode(true) as HTMLImageElement;
   elm.classList.add("animated");
   const style = elm.style;
 
   style.width = `${scaledWidth}px`;
   style.height = `${scaledHeight}px`;
-  style.imageRendering = config.pixelate ? "pixelated" : "auto";
+  style.imageRendering = imageConfig.pixelate ? "pixelated" : "auto";
 
   // Spin speed is zero, should immediately spin all the way
-  if (spinSpeed.max - spinSpeed.min === 0) {
+  if (spin_speed.max - spin_speed.min === 0) {
     style.transform = "rotate(" + -angle + "deg)";
     return elm;
   }
 
   const clockwise = randomBool();
-  const animationDuration = 3 / randomRange(spinSpeed.min, spinSpeed.max);
+  const animationDuration = 3 / randomRange(spin_speed.min, spin_speed.max);
 
   style.animationName = clockwise ? "spinClockwise" : "spinCounterClockwise";
   style.animationDuration = `${animationDuration}s`;
   style.animationIterationCount = "infinite";
 
   // TODO: SLOW DOWN NEAR END? 1  / randomRange(spinSpeed.min, spinSpeed.max); AFTER data.throwDuration * 500 + data.delay
+
+  return elm;
+}
+
+/**
+ * Creates the container in charge of the movement for
+ * a throwable item
+ *
+ * @param leftSide Whether the movement is coming from the left side
+ * @param duration The duration of the whole animation
+ * @param delayMs Delay before the movement begins
+ * @returns The container element
+ */
+function createMovementContainer(
+  thrown: HTMLImageElement,
+  leftSide: boolean,
+  throwables_config: ThrowablesConfig,
+) {
+  const { duration, impact_delay } = throwables_config;
+
+  const elm = document.createElement("div");
+  elm.classList.add("animated");
+
+  const style = elm.style;
+
+  style.animationName = leftSide ? "throwLeft" : "throwRight";
+  style.animationDuration = `${duration}ms`;
+  style.animationDelay = `${impact_delay}ms`;
+
+  elm.appendChild(thrown);
 
   return elm;
 }
@@ -364,8 +334,7 @@ function createThrownImage(
  * @returns The container element
  */
 function createPivotContainer(
-  scaledWidth: number,
-  scaledHeight: number,
+  movement: HTMLDivElement,
   modelPosition: ModelPosition,
   modelData: ModelCalibration,
   modelScale: number,
@@ -386,38 +355,33 @@ function createPivotContainer(
   const randX = (Math.random() * 100 - 50) * modelScale;
   const randY = (Math.random() * 100 - 50) * modelScale;
 
-  const left = window.innerWidth * xPos - scaledWidth / 2 + randX;
-  const top = window.innerHeight * yPos - scaledHeight / 2 + randY;
+  const left = window.innerWidth * xPos - movement.clientWidth / 2 + randX;
+  const top = window.innerHeight * yPos - movement.clientHeight / 2 + randY;
 
   style.left = `${left}px`;
   style.top = `${top}px`;
   style.transform = "rotate(" + angle + "deg)";
 
+  elm.appendChild(movement);
+
   return elm;
 }
 
-/**
- * Creates the container in charge of the movement for
- * a throwable item
- *
- * @param leftSide Whether the movement is coming from the left side
- * @param duration The duration of the whole animation
- * @param delayMs Delay before the movement begins
- * @returns The container element
- */
-function createMovementContainer(
-  leftSide: boolean,
-  duration: number,
-  delayMs: number,
+function createRootContainer(
+  pivot: HTMLDivElement,
+  modelPosition: ModelPosition,
 ) {
   const elm = document.createElement("div");
-  elm.classList.add("animated");
+  elm.classList.add("t-root");
 
   const style = elm.style;
 
-  style.animationName = leftSide ? "throwLeft" : "throwRight";
-  style.animationDuration = `${duration}ms`;
-  style.animationDelay = `${delayMs}ms`;
+  const originXPercent = ((modelPosition.positionX + 1) / 2) * 100;
+  const originYPercent = (1 - (modelPosition.positionY + 1) / 2) * 100;
+
+  style.transformOrigin = `${originXPercent}% ${originYPercent}%`;
+
+  elm.appendChild(pivot);
 
   return elm;
 }
