@@ -14,7 +14,7 @@ use futures::{
     future::{try_join_all, BoxFuture},
     StreamExt,
 };
-use log::{debug, error, warn};
+use log::{error, warn};
 use tokio::{net::TcpStream, task::AbortHandle};
 use tokio_tungstenite::{tungstenite, MaybeTlsStream, WebSocketStream};
 use tungstenite::{
@@ -173,8 +173,6 @@ impl WebsocketClient {
     }
 
     fn handle_notification(&mut self, event: Event) -> anyhow::Result<()> {
-        debug!("twitch event {event:?}");
-
         match event {
             // Channel points are redeemed for reward
             Event::ChannelPointsCustomRewardRedemptionAddV1(payload) => {

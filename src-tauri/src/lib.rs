@@ -123,7 +123,7 @@ fn setup(app: &mut App) -> Result<(), Box<dyn Error>> {
     let (event_tx, event_rx) = mpsc::unbounded_channel();
     let (overlay_tx, overlay_rx) = create_overlay_channel();
 
-    let twitch = Twitch::new(handle.clone(), event_tx.clone());
+    let twitch = Twitch::new(event_tx.clone());
     let overlay_data = OverlayDataStore::new(handle.clone());
 
     let script_handle = create_script_executor(
@@ -184,6 +184,7 @@ fn setup(app: &mut App) -> Result<(), Box<dyn Error>> {
         twitch.clone(),
         script_handle,
         overlay_tx,
+        handle.clone(),
         event_rx,
     ));
 

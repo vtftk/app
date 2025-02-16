@@ -27,10 +27,11 @@ use crate::{
 };
 use anyhow::{anyhow, Context};
 use chrono::TimeDelta;
-use futures::{future::BoxFuture, stream::FuturesUnordered};
+use futures::{future::BoxFuture, stream::FuturesUnordered, Stream};
 use log::{debug, error};
 use sea_orm::{prelude::DateTimeUtc, sqlx::types::chrono::Utc, DatabaseConnection};
-use std::time::Duration;
+use std::{future::poll_fn, task::Poll, time::Duration};
+use tauri::{AppHandle, Emitter};
 use tokio::try_join;
 use twitch_api::types::UserId;
 
@@ -41,49 +42,64 @@ pub async fn process_events(
     twitch: Twitch,
     script_handle: ScriptExecutorHandle,
     event_sender: OverlayMessageSender,
+    app_handle: AppHandle,
 
     mut event_rx: AppEventReceiver,
 ) {
-    while let Some(event) = event_rx.recv().await {
-        debug!("twitch event received: {:?}", event);
+    let mut futures = FuturesUnordered::new();
+    let mut futures = std::pin::pin!(futures);
 
-        tokio::spawn({
-            let db = db.clone();
-            let twitch = twitch.clone();
-            let script_handle = script_handle.clone();
-            let event_sender = event_sender.clone();
+    poll_fn::<(), _>(|cx| {
+        // Poll new event execution
+        while let Poll::Ready(Some(event)) = event_rx.poll_recv(cx) {
+            debug!("app event received: {:?}", event);
 
-            async move {
-                let result = process_event(db, twitch, script_handle, event_sender, event).await;
+            futures.push(async {
+                let result = process_event(
+                    &db,
+                    &twitch,
+                    &script_handle,
+                    &event_sender,
+                    &app_handle,
+                    event,
+                )
+                .await;
 
                 if let Err(err) = result {
                     debug!("failed to process twitch event: {err:?}",);
                 }
-            }
-        });
-    }
+            });
+        }
+
+        // Poll completions until no more ready
+        while let Poll::Ready(Some(_)) = futures.as_mut().poll_next(cx) {}
+
+        Poll::Pending
+    })
+    .await;
 }
 
 async fn process_event(
-    db: DatabaseConnection,
-    twitch: Twitch,
-    script_handle: ScriptExecutorHandle,
-    event_sender: OverlayMessageSender,
+    db: &DatabaseConnection,
+    twitch: &Twitch,
+    script_handle: &ScriptExecutorHandle,
+    event_sender: &OverlayMessageSender,
+    app_handle: &AppHandle,
     event: AppEvent,
 ) -> anyhow::Result<()> {
     let match_data: EventMatchingData = match event {
         // Matchable events
-        AppEvent::Redeem(event) => match_redeem_event(&db, event).await?,
-        AppEvent::CheerBits(event) => match_cheer_bits_event(&db, event).await?,
-        AppEvent::Follow(event) => match_follow_event(&db, event).await?,
-        AppEvent::Sub(event) => match_subscription_event(&db, event).await?,
-        AppEvent::GiftSub(event) => match_gifted_subscription_event(&db, event).await?,
-        AppEvent::ResubMsg(event) => match_re_subscription_event(&db, event).await?,
-        AppEvent::ChatMsg(event) => match_chat_event(&db, event).await?,
-        AppEvent::Raid(event) => match_raid_event(&db, event).await?,
-        AppEvent::AdBreakBegin(event) => match_ad_break_event(&db, event).await?,
-        AppEvent::ShoutoutReceive(event) => match_shoutout_receive_event(&db, event).await?,
-        AppEvent::TimerCompleted(event) => match_timer_complete_event(&db, &twitch, event).await?,
+        AppEvent::Redeem(event) => match_redeem_event(db, event).await?,
+        AppEvent::CheerBits(event) => match_cheer_bits_event(db, event).await?,
+        AppEvent::Follow(event) => match_follow_event(db, event).await?,
+        AppEvent::Sub(event) => match_subscription_event(db, event).await?,
+        AppEvent::GiftSub(event) => match_gifted_subscription_event(db, event).await?,
+        AppEvent::ResubMsg(event) => match_re_subscription_event(db, event).await?,
+        AppEvent::ChatMsg(event) => match_chat_event(db, event).await?,
+        AppEvent::Raid(event) => match_raid_event(db, event).await?,
+        AppEvent::AdBreakBegin(event) => match_ad_break_event(db, event).await?,
+        AppEvent::ShoutoutReceive(event) => match_shoutout_receive_event(db, event).await?,
+        AppEvent::TimerCompleted(event) => match_timer_complete_event(db, twitch, event).await?,
 
         // Internal events
         AppEvent::ModeratorsChanged => {
@@ -106,6 +122,15 @@ async fn process_event(
             twitch.reset().await;
             return Ok(());
         }
+
+        AppEvent::TwitchClientLoggedOut => {
+            _ = app_handle.emit("logout", ());
+            return Ok(());
+        }
+        AppEvent::TwitchClientLoggedIn => {
+            _ = app_handle.emit("authenticated", ());
+            return Ok(());
+        }
     };
 
     let command_futures =
@@ -114,9 +139,9 @@ async fn process_event(
             .into_iter()
             .map(|command| -> BoxFuture<'_, anyhow::Result<()>> {
                 Box::pin(execute_command(
-                    &db,
-                    &script_handle,
-                    &twitch,
+                    db,
+                    script_handle,
+                    twitch,
                     command,
                     match_data.event_data.clone(),
                 ))
@@ -128,10 +153,10 @@ async fn process_event(
             .into_iter()
             .map(|event| -> BoxFuture<'_, anyhow::Result<()>> {
                 Box::pin(execute_event(
-                    &db,
-                    &twitch,
-                    &script_handle,
-                    &event_sender,
+                    db,
+                    twitch,
+                    script_handle,
+                    event_sender,
                     event,
                     match_data.event_data.clone(),
                 ))

@@ -1,14 +1,13 @@
 use super::websocket::WebsocketManagedTask;
 use crate::{
     database::entity::{secrets::SecretModel, TWITCH_SECRET_KEY},
-    events::AppEventSender,
+    events::{AppEvent, AppEventSender},
 };
 use anyhow::{anyhow, Context};
 use futures::TryStreamExt;
 use log::{debug, error, info};
 use sea_orm::{DatabaseConnection, ModelTrait};
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter};
 use tokio::{
     join,
     sync::{RwLock, RwLockReadGuard, RwLockWriteGuard},
@@ -72,13 +71,12 @@ pub struct Twitch {
 }
 
 impl Twitch {
-    pub fn new(app_handle: AppHandle, tx: AppEventSender) -> Self {
+    pub fn new(tx: AppEventSender) -> Self {
         Self {
             _inner: Arc::new(TwitchInner {
                 helix_client: HelixClient::default(),
                 state: Default::default(),
                 tx,
-                app_handle,
             }),
         }
     }
@@ -229,7 +227,7 @@ impl Twitch {
         }
 
         // Tell the app we are authenticated
-        _ = self._inner.app_handle.emit("authenticated", ());
+        _ = self._inner.tx.send(AppEvent::TwitchClientLoggedIn);
 
         // Load initial moderator and VIP lists
         let (rewards_result, vips_result, mods_result) = join!(
@@ -258,7 +256,7 @@ impl Twitch {
         }
 
         // Tell the app we are authenticated
-        _ = self._inner.app_handle.emit("logout", ());
+        _ = self._inner.tx.send(AppEvent::TwitchClientLoggedOut);
     }
 
     pub async fn get_moderator_list(&self) -> anyhow::Result<Arc<[Moderator]>> {
@@ -439,7 +437,6 @@ struct TwitchInner {
     helix_client: HelixClient<'static, reqwest::Client>,
     state: RwLock<TwitchManagerState>,
     tx: AppEventSender,
-    app_handle: AppHandle,
 }
 
 pub struct TwitchManagerStateAuthenticated {
@@ -454,6 +451,7 @@ pub struct TwitchManagerStateAuthenticated {
 
     /// Current loaded list of moderators
     moderators: Option<Arc<[Moderator]>>,
+
     /// Current loaded list of vips
     vips: Option<Arc<[Vip]>>,
 }

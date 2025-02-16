@@ -55,6 +55,12 @@ pub enum AppEvent {
 
     /// Twitch client is resetting (Lost connection/authentication)
     TwitchClientReset,
+
+    /// Twitch has been logged out
+    TwitchClientLoggedOut,
+
+    /// Twitch has been logged in
+    TwitchClientLoggedIn,
 }
 
 #[derive(Debug, Clone)]
