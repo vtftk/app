@@ -98,9 +98,8 @@ export async function throwItem(
     modelScale,
     angle,
   );
-  const root = createRootContainer(pivot, modelPosition);
 
-  document.body.appendChild(root);
+  document.body.appendChild(pivot);
 
   // Impact is encountered half way through the animation
   const impactTimeout =
@@ -125,7 +124,7 @@ export async function throwItem(
     // Wait remaining duration before removing
     await sleep(throwables_config.duration / 2);
     // Remove after complete
-    document.body.removeChild(root);
+    document.body.removeChild(pivot);
     return;
   }
 
@@ -135,7 +134,7 @@ export async function throwItem(
   thrown.style.transform = "";
 
   // Convert the item into a physics object
-  throwItemPhysics(physics_config, movement, root, leftSide, angle);
+  throwItemPhysics(physics_config, movement, pivot, leftSide, angle);
 }
 
 function throwItemPhysics(
@@ -261,14 +260,18 @@ function createThrownImage(
   throwables_config: ThrowablesConfig,
 ): HTMLImageElement {
   const { item_scale, spin_speed } = throwables_config;
+
+  // Choose random scale
   const itemScale = percentRange(modelScale, item_scale.min, item_scale.max);
 
+  // Scale down image width
   const scaledWidth = image.width * imageConfig.scale * itemScale;
   const scaledHeight = image.height * imageConfig.scale * itemScale;
 
   const elm = image.cloneNode(true) as HTMLImageElement;
-  elm.classList.add("animated");
   const style = elm.style;
+
+  elm.classList.add("t-anim");
 
   style.width = `${scaledWidth}px`;
   style.height = `${scaledHeight}px`;
@@ -281,26 +284,15 @@ function createThrownImage(
   }
 
   const clockwise = randomBool();
-  const animationDuration = 3 / randomRange(spin_speed.min, spin_speed.max);
+  const animationDuration = randomRange(spin_speed.min, spin_speed.max);
 
   style.animationName = clockwise ? "spinClockwise" : "spinCounterClockwise";
-  style.animationDuration = `${animationDuration}s`;
+  style.animationDuration = `${animationDuration}ms`;
   style.animationIterationCount = "infinite";
-
-  // TODO: SLOW DOWN NEAR END? 1  / randomRange(spinSpeed.min, spinSpeed.max); AFTER data.throwDuration * 500 + data.delay
 
   return elm;
 }
 
-/**
- * Creates the container in charge of the movement for
- * a throwable item
- *
- * @param leftSide Whether the movement is coming from the left side
- * @param duration The duration of the whole animation
- * @param delayMs Delay before the movement begins
- * @returns The container element
- */
 function createMovementContainer(
   thrown: HTMLImageElement,
   leftSide: boolean,
@@ -309,7 +301,7 @@ function createMovementContainer(
   const { duration, impact_delay } = throwables_config;
 
   const elm = document.createElement("div");
-  elm.classList.add("animated");
+  elm.classList.add("t-anim");
 
   const style = elm.style;
 
@@ -322,17 +314,6 @@ function createMovementContainer(
   return elm;
 }
 
-/**
- * Creates a container for handling the pivoting of a throwable
- *
- * @param scaledWidth Scaled width of the image
- * @param scaledHeight Scaled height of the image
- * @param modelPosition The position of the model
- * @param modelData Model and calibration data for the model
- * @param modelScale Scale of the model
- * @param angle Angle of the throwable
- * @returns The container element
- */
 function createPivotContainer(
   movement: HTMLDivElement,
   modelPosition: ModelPosition,
@@ -341,7 +322,7 @@ function createPivotContainer(
   angle: number,
 ) {
   const elm = document.createElement("div");
-  elm.classList.add("thrown");
+  elm.classList.add("t-pivot");
 
   const style = elm.style;
 
@@ -352,8 +333,8 @@ function createPivotContainer(
   const yPos = 1 - (modelPosition.positionY - offsetY + 1) / 2;
 
   // Random offsets to the X and Y positions
-  const randX = (Math.random() * 100 - 50) * modelScale;
-  const randY = (Math.random() * 100 - 50) * modelScale;
+  const randX = randomRange(-50, 50) * modelScale;
+  const randY = randomRange(-50, 50) * modelScale;
 
   const left = window.innerWidth * xPos - movement.clientWidth / 2 + randX;
   const top = window.innerHeight * yPos - movement.clientHeight / 2 + randY;
@@ -363,25 +344,6 @@ function createPivotContainer(
   style.transform = "rotate(" + angle + "deg)";
 
   elm.appendChild(movement);
-
-  return elm;
-}
-
-function createRootContainer(
-  pivot: HTMLDivElement,
-  modelPosition: ModelPosition,
-) {
-  const elm = document.createElement("div");
-  elm.classList.add("t-root");
-
-  const style = elm.style;
-
-  const originXPercent = ((modelPosition.positionX + 1) / 2) * 100;
-  const originYPercent = (1 - (modelPosition.positionY + 1) / 2) * 100;
-
-  style.transformOrigin = `${originXPercent}% ${originYPercent}%`;
-
-  elm.appendChild(pivot);
 
   return elm;
 }

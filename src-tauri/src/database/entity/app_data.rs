@@ -160,8 +160,8 @@ impl Default for ThrowablesConfig {
         Self {
             duration: 1000.,
             spin_speed: MinMax {
-                min: 5000.,
-                max: 10_000.,
+                min: 300.,
+                max: 750.,
             },
             throw_angle: MinMax {
                 min: -45.,
