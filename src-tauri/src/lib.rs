@@ -1,6 +1,10 @@
 use anyhow::Context;
+use commands::events::update_scheduler_events;
 use database::{clean_old_data, entity::app_data::AppDataModel};
-use events::{processing::process_twitch_events, scheduler::create_scheduler};
+use events::{
+    processing::process_twitch_events,
+    scheduler::{create_scheduler, SchedulerContext},
+};
 use overlay::{create_overlay_channel, OverlayDataStore};
 use script::runtime::{create_script_executor, ScriptRuntimeData};
 use sea_orm::DatabaseConnection;
@@ -133,14 +137,23 @@ fn setup(app: &mut App) -> Result<(), Box<dyn Error>> {
     );
 
     // Create background event scheduler
-    let scheduler_handle = create_scheduler(
+    let scheduler_handle = create_scheduler(SchedulerContext::new(
         db.clone(),
         twitch.clone(),
         script_handle.clone(),
         overlay_tx.clone(),
-    );
+    ));
 
     let storage = Storage::new_fs(handle)?;
+
+    // Queue the scheduler events
+    spawn({
+        let db = db.clone();
+        let scheduler_handle = scheduler_handle.clone();
+        async move {
+            update_scheduler_events(&db, &scheduler_handle).await;
+        }
+    });
 
     // Run background cleanup
     spawn(clean_old_data(db.clone()));

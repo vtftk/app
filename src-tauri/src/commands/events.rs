@@ -10,7 +10,11 @@ use crate::{
         events::{CreateEvent, EventModel, EventTrigger, EventTriggerType, UpdateEvent},
         shared::{ExecutionsQuery, LogsQuery, UpdateOrdering},
     },
-    events::{matching::EventData, outcome::produce_outcome_message, scheduler::SchedulerHandle},
+    events::{
+        matching::EventData,
+        outcome::produce_outcome_message,
+        scheduler::{SchedulerHandle, SchedulerQueueEvent},
+    },
     overlay::OverlayMessageSender,
     script::runtime::ScriptExecutorHandle,
     twitch::manager::Twitch,
@@ -98,9 +102,27 @@ pub async fn delete_event(
     Ok(())
 }
 
-async fn update_scheduler_events(db: &DatabaseConnection, scheduler: &SchedulerHandle) {
+/// Sets the current set of events for the scheduler by fetching the ucrrent list of
+/// timer events from the database
+pub async fn update_scheduler_events(db: &DatabaseConnection, scheduler: &SchedulerHandle) {
     if let Ok(events) = EventModel::get_by_trigger_type(db, EventTriggerType::Timer).await {
-        _ = scheduler.update_events(events).await;
+        // Map into scheduler events
+        let scheduled = events
+            .into_iter()
+            .filter_map(|event| {
+                let interval = match &event.trigger {
+                    EventTrigger::Timer { interval, .. } => *interval,
+                    _ => return None,
+                };
+
+                Some(SchedulerQueueEvent {
+                    event_id: event.id,
+                    interval,
+                })
+            })
+            .collect();
+
+        _ = scheduler.update_events(scheduled).await;
     }
 }
 

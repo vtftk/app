@@ -1,7 +1,7 @@
 use crate::{
     database::entity::{
         chat_history::ChatHistoryModel,
-        events::{EventModel, EventTrigger, EventTriggerType},
+        events::{EventModel, EventTrigger},
     },
     events::{
         matching::{EventData, EventInputData},
@@ -21,9 +21,16 @@ use tokio::{
     sync::mpsc,
     time::{sleep_until, Instant},
 };
+use uuid::Uuid;
 
 pub struct ScheduledEvent {
-    pub event: EventModel,
+    /// ID of the event to execute
+    pub event_id: Uuid,
+
+    /// Interval the event executes at
+    /// (For further scheduling)
+    pub interval: u64,
+
     /// Next instance the
     pub next_run: Instant,
 }
@@ -32,7 +39,7 @@ impl Eq for ScheduledEvent {}
 
 impl PartialEq for ScheduledEvent {
     fn eq(&self, other: &Self) -> bool {
-        self.event.id.eq(&other.event.id)
+        self.event_id.eq(&other.event_id)
     }
 }
 
@@ -51,53 +58,64 @@ impl Ord for ScheduledEvent {
 }
 
 #[derive(Clone)]
-pub struct SchedulerHandle(mpsc::Sender<Vec<EventModel>>);
+pub struct SchedulerHandle(mpsc::Sender<Vec<SchedulerQueueEvent>>);
+
+pub struct SchedulerQueueEvent {
+    /// ID of the event to execute
+    pub event_id: Uuid,
+    /// Interval the event executes at
+    /// (For further scheduling)
+    pub interval: u64,
+}
 
 impl SchedulerHandle {
-    pub async fn update_events(&self, events: Vec<EventModel>) -> anyhow::Result<()> {
+    pub async fn update_events(&self, events: Vec<SchedulerQueueEvent>) -> anyhow::Result<()> {
         self.0.send(events).await.context("failed to send event")
     }
 }
 
-pub fn create_scheduler(
+/// Context for executing events
+#[derive(Clone)]
+pub struct SchedulerContext {
     db: DatabaseConnection,
     twitch: Twitch,
     script_handle: ScriptExecutorHandle,
-    event_sender: OverlayMessageSender,
-) -> SchedulerHandle {
-    let (tx, rx) = mpsc::channel(5);
+    overlay_tx: OverlayMessageSender,
+}
 
-    // Load the initial events data
-    tauri::async_runtime::spawn({
-        let db = db.clone();
-        let tx = tx.clone();
-
-        async move {
-            let events = match EventModel::get_by_trigger_type(&db, EventTriggerType::Timer).await {
-                Ok(events) => events,
-                _ => return,
-            };
-
-            _ = tx.send(events).await;
+impl SchedulerContext {
+    pub fn new(
+        db: DatabaseConnection,
+        twitch: Twitch,
+        script_handle: ScriptExecutorHandle,
+        overlay_tx: OverlayMessageSender,
+    ) -> Self {
+        Self {
+            db,
+            twitch,
+            script_handle,
+            overlay_tx,
         }
-    });
+    }
+}
+
+pub fn create_scheduler(ctx: SchedulerContext) -> SchedulerHandle {
+    let (tx, rx) = mpsc::channel(5);
+    let handle = SchedulerHandle(tx);
 
     tauri::async_runtime::spawn(SchedulerEventLoop {
         rx,
         events: BinaryHeap::new(),
         current_sleep: None,
-        db,
-        twitch,
-        script_handle,
-        event_sender,
+        ctx,
     });
 
-    SchedulerHandle(tx)
+    handle
 }
 
 struct SchedulerEventLoop {
     /// Receiver for the latest events list
-    rx: mpsc::Receiver<Vec<EventModel>>,
+    rx: mpsc::Receiver<Vec<SchedulerQueueEvent>>,
 
     /// Heap of scheduled events, ordered by the event which is
     /// due to come first
@@ -106,19 +124,17 @@ struct SchedulerEventLoop {
     /// Current sleep future
     current_sleep: Option<BoxFuture<'static, ()>>,
 
-    db: DatabaseConnection,
-    twitch: Twitch,
-    script_handle: ScriptExecutorHandle,
-    event_sender: OverlayMessageSender,
+    ctx: SchedulerContext,
 }
 
-async fn execute_scheduled_event(
-    db: DatabaseConnection,
-    twitch: Twitch,
-    script_handle: ScriptExecutorHandle,
-    event_sender: OverlayMessageSender,
-    event: EventModel,
-) -> anyhow::Result<()> {
+async fn execute_scheduled_event(event_id: Uuid, ctx: SchedulerContext) -> anyhow::Result<()> {
+    let db = &ctx.db;
+
+    let event = EventModel::get_by_id(db, event_id)
+        .await
+        .context("failed to get event to trigger")?
+        .context("unknown event")?;
+
     let min_chat_messages = match &event.trigger {
         EventTrigger::Timer {
             min_chat_messages, ..
@@ -130,18 +146,18 @@ async fn execute_scheduled_event(
         }
     };
 
-    let user_id = twitch.get_user_id().await;
+    let user_id = ctx.twitch.get_user_id().await;
 
     // Ensure minimum chat messages has been reached
     if min_chat_messages > 0 {
         let last_execution = event
-            .last_execution(&db, 0)
+            .last_execution(&ctx.db, 0)
             .await
             .context("failed to get last execution")?;
 
         if let Some(last_execution) = last_execution {
             let message_count =
-                ChatHistoryModel::count_since(&db, last_execution.created_at, user_id).await?;
+                ChatHistoryModel::count_since(&ctx.db, last_execution.created_at, user_id).await?;
 
             if message_count < min_chat_messages as u64 {
                 debug!("skipping timer execution, not enough chat messages since last execution");
@@ -151,10 +167,10 @@ async fn execute_scheduled_event(
     }
 
     execute_event(
-        &db,
-        &twitch,
-        &script_handle,
-        &event_sender,
+        &ctx.db,
+        &ctx.twitch,
+        &ctx.script_handle,
+        &ctx.overlay_tx,
         event,
         EventData {
             user: None,
@@ -173,7 +189,7 @@ impl SchedulerEventLoop {
             // Create the scheduled events
             self.events = events
                 .into_iter()
-                .filter_map(create_scheduled_event)
+                .map(|event| create_scheduled_event(event.event_id, event.interval))
                 .collect();
 
             // Clear sleep state
@@ -190,32 +206,26 @@ impl SchedulerEventLoop {
             self.current_sleep = None;
 
             // Value should always be present when we have awaited a sleep state
-            let event = match self.events.pop() {
+            let ScheduledEvent {
+                event_id, interval, ..
+            } = match self.events.pop() {
                 Some(value) => value,
                 None => return Poll::Pending,
             };
 
             // Trigger the event
             tauri::async_runtime::spawn({
-                let event = event.event.clone();
-                let db = self.db.clone();
-                let twitch = self.twitch.clone();
-                let script_handle = self.script_handle.clone();
-                let event_sender = self.event_sender.clone();
+                let ctx = self.ctx.clone();
 
                 async move {
-                    if let Err(err) =
-                        execute_scheduled_event(db, twitch, script_handle, event_sender, event)
-                            .await
-                    {
+                    if let Err(err) = execute_scheduled_event(event_id, ctx).await {
                         error!("error while executing event outcome (in timer): {err:?}");
                     }
                 }
             });
 
-            if let Some(event) = create_scheduled_event(event.event) {
-                self.events.push(event);
-            }
+            // Create the next iteration of the event
+            self.events.push(create_scheduled_event(event_id, interval));
 
             // Emit event
             return Poll::Ready(());
@@ -251,14 +261,13 @@ impl Future for SchedulerEventLoop {
     }
 }
 
-fn create_scheduled_event(event: EventModel) -> Option<ScheduledEvent> {
-    let interval = match &event.trigger {
-        EventTrigger::Timer { interval, .. } => *interval,
-        _ => return None,
-    };
-
+fn create_scheduled_event(event_id: Uuid, interval: u64) -> ScheduledEvent {
     let next_run = get_next_interval_instant(interval);
-    Some(ScheduledEvent { event, next_run })
+    ScheduledEvent {
+        event_id,
+        interval,
+        next_run,
+    }
 }
 
 /// Gets the next instant for a fixed interval
