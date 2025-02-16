@@ -17,8 +17,8 @@ pub mod outcome;
 pub mod processing;
 pub mod scheduler;
 
-pub type AppEventReceiver = mpsc::Receiver<AppEvent>;
-pub type AppEventSender = mpsc::Sender<AppEvent>;
+pub type AppEventReceiver = mpsc::UnboundedReceiver<AppEvent>;
+pub type AppEventSender = mpsc::UnboundedSender<AppEvent>;
 
 /// Events that can occur within the app
 #[derive(Debug, Clone)]

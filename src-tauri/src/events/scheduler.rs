@@ -92,14 +92,9 @@ struct SchedulerEventLoop {
 
 impl SchedulerEventLoop {
     fn execute_event(event_id: Uuid, event_tx: AppEventSender) {
-        tauri::async_runtime::spawn(async move {
-            if let Err(err) = event_tx
-                .send(AppEvent::TimerCompleted(TimerCompleted { event_id }))
-                .await
-            {
-                error!("failed to send timer complete event, event loop stopped: {err:?}");
-            }
-        });
+        if let Err(err) = event_tx.send(AppEvent::TimerCompleted(TimerCompleted { event_id })) {
+            error!("failed to send timer complete event, event loop stopped: {err:?}");
+        }
     }
 
     fn poll_inner(&mut self, cx: &mut std::task::Context<'_>) -> Poll<()> {

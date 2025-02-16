@@ -120,7 +120,7 @@ fn setup(app: &mut App) -> Result<(), Box<dyn Error>> {
     let db = block_on(database::connect_database(app_data_path.join("app.db")))
         .context("failed to load database")?;
 
-    let (event_tx, event_rx) = mpsc::channel(10);
+    let (event_tx, event_rx) = mpsc::unbounded_channel();
     let (overlay_tx, overlay_rx) = create_overlay_channel();
 
     let twitch = Twitch::new(handle.clone(), event_tx.clone());

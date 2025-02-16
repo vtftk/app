@@ -163,7 +163,7 @@ impl WebsocketClient {
 
             // Handle expected messages
             EventsubWebsocketData::Notification { payload, .. } => {
-                self.handle_notification(payload).await?
+                self.handle_notification(payload)?
             }
 
             _ => {}
@@ -172,7 +172,7 @@ impl WebsocketClient {
         Ok(())
     }
 
-    async fn handle_notification(&mut self, event: Event) -> anyhow::Result<()> {
+    fn handle_notification(&mut self, event: Event) -> anyhow::Result<()> {
         debug!("twitch event {event:?}");
 
         match event {
@@ -189,7 +189,6 @@ impl WebsocketClient {
                         user_display_name: msg.user_name,
                         user_input: msg.user_input,
                     }))
-                    .await
                     .context("failed to send event")?;
             }
 
@@ -205,7 +204,6 @@ impl WebsocketClient {
                         user_display_name: msg.user_name,
                         message: msg.message,
                     }))
-                    .await
                     .context("failed to send event")?;
             }
 
@@ -218,7 +216,6 @@ impl WebsocketClient {
                         user_name: msg.user_login,
                         user_display_name: msg.user_name,
                     }))
-                    .await
                     .context("failed to send event")?;
             }
 
@@ -234,21 +231,22 @@ impl WebsocketClient {
                         user_name: msg.user_login,
                         user_display_name: msg.user_name,
                     }))
-                    .await
                     .context("failed to send event")?;
             }
             // User gifts subscription (1 or more)
             Event::ChannelSubscriptionGiftV1(payload) => {
                 let msg = map_message(payload.message)?;
-                _ = self.tx.send(AppEvent::GiftSub(TwitchEventGiftSub {
-                    anonymous: msg.is_anonymous,
-                    total: msg.total,
-                    cumulative_total: msg.cumulative_total,
-                    tier: msg.tier,
-                    user_id: msg.user_id,
-                    user_name: msg.user_login,
-                    user_display_name: msg.user_name,
-                }));
+                self.tx
+                    .send(AppEvent::GiftSub(TwitchEventGiftSub {
+                        anonymous: msg.is_anonymous,
+                        total: msg.total,
+                        cumulative_total: msg.cumulative_total,
+                        tier: msg.tier,
+                        user_id: msg.user_id,
+                        user_name: msg.user_login,
+                        user_display_name: msg.user_name,
+                    }))
+                    .context("failed to send event")?;
             }
             // User sends resubscription message (User sub has resubbed, runs when user sends the resub message to chat)
             Event::ChannelSubscriptionMessageV1(payload) => {
@@ -265,7 +263,6 @@ impl WebsocketClient {
                         user_name: msg.user_login,
                         user_display_name: msg.user_name,
                     }))
-                    .await
                     .context("failed to send event")?;
             }
 
@@ -281,7 +278,6 @@ impl WebsocketClient {
                         message: msg.message,
                         cheer: msg.cheer,
                     }))
-                    .await
                     .context("failed to send event")?;
             }
 
@@ -290,7 +286,6 @@ impl WebsocketClient {
                 let _msg = map_message(payload.message)?;
                 self.tx
                     .send(AppEvent::ModeratorsChanged)
-                    .await
                     .context("failed to send event")?;
             }
             // Channel moderator is removed
@@ -298,7 +293,6 @@ impl WebsocketClient {
                 let _msg = map_message(payload.message)?;
                 self.tx
                     .send(AppEvent::ModeratorsChanged)
-                    .await
                     .context("failed to send event")?;
             }
 
@@ -307,7 +301,6 @@ impl WebsocketClient {
                 let _msg = map_message(payload.message)?;
                 self.tx
                     .send(AppEvent::VipsChanged)
-                    .await
                     .context("failed to send event")?;
             }
 
@@ -316,7 +309,6 @@ impl WebsocketClient {
                 let _msg = map_message(payload.message)?;
                 self.tx
                     .send(AppEvent::VipsChanged)
-                    .await
                     .context("failed to send event")?;
             }
 
@@ -325,7 +317,6 @@ impl WebsocketClient {
                 let _msg = map_message(payload.message)?;
                 self.tx
                     .send(AppEvent::RewardsChanged)
-                    .await
                     .context("failed to send event")?;
             }
 
@@ -334,7 +325,6 @@ impl WebsocketClient {
                 let _msg = map_message(payload.message)?;
                 self.tx
                     .send(AppEvent::RewardsChanged)
-                    .await
                     .context("failed to send event")?;
             }
 
@@ -343,7 +333,6 @@ impl WebsocketClient {
                 let _msg = map_message(payload.message)?;
                 self.tx
                     .send(AppEvent::RewardsChanged)
-                    .await
                     .context("failed to send event")?;
             }
 
@@ -357,7 +346,6 @@ impl WebsocketClient {
                         user_display_name: msg.from_broadcaster_user_name,
                         viewers: msg.viewers,
                     }))
-                    .await
                     .context("failed to send event")?;
             }
 
@@ -368,7 +356,6 @@ impl WebsocketClient {
                     .send(AppEvent::AdBreakBegin(TwitchEventAdBreakBegin {
                         duration_seconds: msg.duration_seconds,
                     }))
-                    .await
                     .context("failed to send event")?;
             }
 
@@ -382,7 +369,6 @@ impl WebsocketClient {
                         user_display_name: msg.from_broadcaster_user_name,
                         viewer_count: msg.viewer_count,
                     }))
-                    .await
                     .context("failed to send event")?;
             }
 
