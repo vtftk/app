@@ -7,8 +7,6 @@ export type PhysicsObject = {
   velocityX: number;
   velocityY: number;
 
-  // Root element to remove from DOM on completion
-  root: HTMLElement;
   // HTML element the physics are applied to
   movement: HTMLElement;
 };
@@ -84,7 +82,7 @@ export function createPhysicsEngine(config: PhysicsEngineConfig) {
 
       // Remove objects that have left the screen
       if (object.y > 100 || (reverseGravity && object.y < -100)) {
-        document.body.removeChild(object.root);
+        document.body.removeChild(object.movement);
         objects.splice(i--, 1);
         continue;
       }

@@ -41,12 +41,9 @@ body {
   position: absolute;
 }
 
-/* Thrown image */
-.t-image {
-}
-
 /* Animated container, apply some animation changes */
-.t-anim {
+.t-anim,
+.t-pivot {
   -webkit-animation-timing-function: linear !important;
   animation-timing-function: linear !important;
   -webkit-animation-fill-mode: both !important;
@@ -61,72 +58,33 @@ body {
   pointer-events: none;
 }
 
-@-webkit-keyframes throwLeft {
-  0% {
-    transform: translate(-150vw, 0vh);
-  }
-  25% {
-    transform: translate(-75vw, -10vh);
-  }
-  50% {
-    transform: translate(0vw, 0vh);
-  }
-  100% {
-    transform: translate(-30vw, -120vh);
-  }
-}
-
 @keyframes throwLeft {
   0% {
-    transform: translate(-150vw, 0vh);
+    transform: rotate(var(--rotate-angle)) translate(-150vw, 0vh);
   }
   25% {
-    transform: translate(-75vw, -10vh);
+    transform: rotate(var(--rotate-angle)) translate(-75vw, -10vh);
   }
   50% {
-    transform: translate(0vw, 0vh);
+    transform: rotate(var(--rotate-angle)) translate(0vw, 0vh);
   }
   100% {
-    transform: translate(-30vw, -120vh);
-  }
-}
-
-@-webkit-keyframes throwRight {
-  0% {
-    transform: translate(150vw, 0vh);
-  }
-  25% {
-    transform: translate(75vw, -10vh);
-  }
-  50% {
-    transform: translate(0vw, 0vh);
-  }
-  100% {
-    transform: translate(30vw, -120vh);
+    transform: rotate(var(--rotate-angle)) translate(-30vw, -120vh);
   }
 }
 
 @keyframes throwRight {
   0% {
-    transform: translate(150vw, 0vh);
+    transform: rotate(var(--rotate-angle)) translate(150vw, 0vh);
   }
   25% {
-    transform: translate(75vw, -10vh);
+    transform: rotate(var(--rotate-angle)) translate(75vw, -10vh);
   }
   50% {
-    transform: translate(0vw, 0vh);
+    transform: rotate(var(--rotate-angle)) translate(0vw, 0vh);
   }
   100% {
-    transform: translate(30vw, -120vh);
-  }
-}
-
-@-webkit-keyframes spinClockwise {
-  from {
-    transform: rotate(0);
-  }
-  to {
-    transform: rotate(360);
+    transform: rotate(var(--rotate-angle)) translate(30vw, -120vh);
   }
 }
 
@@ -136,15 +94,6 @@ body {
   }
   to {
     transform: rotate(360deg);
-  }
-}
-
-@-webkit-keyframes spinCounterClockwise {
-  from {
-    transform: rotate(360deg);
-  }
-  to {
-    transform: rotate(0deg);
   }
 }
 

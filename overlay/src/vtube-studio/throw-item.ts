@@ -90,16 +90,17 @@ export async function throwItem(
     angle,
     throwables_config,
   );
-  const movement = createMovementContainer(thrown, leftSide, throwables_config);
-  const pivot = createPivotContainer(
-    movement,
+  const movement = createMovementContainer(
+    thrown,
     modelPosition,
     modelData,
     modelScale,
     angle,
+    leftSide,
+    throwables_config,
   );
 
-  document.body.appendChild(pivot);
+  document.body.appendChild(movement);
 
   // Impact is encountered half way through the animation
   const impactTimeout =
@@ -124,23 +125,22 @@ export async function throwItem(
     // Wait remaining duration before removing
     await sleep(throwables_config.duration / 2);
     // Remove after complete
-    document.body.removeChild(pivot);
+    document.body.removeChild(movement);
     return;
   }
 
   // Strip animations and transforms before applying physics
   movement.style.animationName = "";
-  pivot.style.transform = "";
+  movement.style.transform = "";
   thrown.style.transform = "";
 
   // Convert the item into a physics object
-  throwItemPhysics(physics_config, movement, pivot, leftSide, angle);
+  throwItemPhysics(physics_config, movement, leftSide, angle);
 }
 
 function throwItemPhysics(
   physics_config: PhysicsConfig,
   movement: HTMLDivElement,
-  root: HTMLDivElement,
   leftSide: boolean,
   angle: number,
 ) {
@@ -182,7 +182,6 @@ function throwItemPhysics(
     y: 0,
     velocityX,
     velocityY,
-    root,
     movement,
   });
 }
@@ -294,33 +293,22 @@ function createThrownImage(
 }
 
 function createMovementContainer(
-  thrown: HTMLImageElement,
-  leftSide: boolean,
-  throwables_config: ThrowablesConfig,
-) {
-  const { duration, impact_delay } = throwables_config;
+  // Element containing the image itself
+  image: HTMLImageElement,
 
-  const elm = document.createElement("div");
-  elm.classList.add("t-anim");
-
-  const style = elm.style;
-
-  style.animationName = leftSide ? "throwLeft" : "throwRight";
-  style.animationDuration = `${duration}ms`;
-  style.animationDelay = `${impact_delay}ms`;
-
-  elm.appendChild(thrown);
-
-  return elm;
-}
-
-function createPivotContainer(
-  movement: HTMLDivElement,
+  // Model data
   modelPosition: ModelPosition,
   modelData: ModelCalibration,
   modelScale: number,
+
+  // Angle and side
   angle: number,
+  leftSide: boolean,
+
+  // Config
+  throwables_config: ThrowablesConfig,
 ) {
+  const { duration, impact_delay } = throwables_config;
   const elm = document.createElement("div");
   elm.classList.add("t-pivot");
 
@@ -336,14 +324,19 @@ function createPivotContainer(
   const randX = randomRange(-50, 50) * modelScale;
   const randY = randomRange(-50, 50) * modelScale;
 
-  const left = window.innerWidth * xPos - movement.clientWidth / 2 + randX;
-  const top = window.innerHeight * yPos - movement.clientHeight / 2 + randY;
+  const left = window.innerWidth * xPos - image.clientWidth / 2 + randX;
+  const top = window.innerHeight * yPos - image.clientHeight / 2 + randY;
+
+  style.setProperty("--rotate-angle", `${angle}deg`);
 
   style.left = `${left}px`;
   style.top = `${top}px`;
-  style.transform = "rotate(" + angle + "deg)";
 
-  elm.appendChild(movement);
+  style.animationName = leftSide ? "throwLeft" : "throwRight";
+  style.animationDuration = `${duration}ms`;
+  style.animationDelay = `${impact_delay}ms`;
+
+  elm.appendChild(image);
 
   return elm;
 }
