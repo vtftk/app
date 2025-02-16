@@ -6,7 +6,7 @@ use sea_orm::{
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::twitch::models::TwitchEventUser;
+use crate::events::TwitchEventUser;
 
 use super::shared::DbResult;
 

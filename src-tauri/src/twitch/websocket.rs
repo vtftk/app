@@ -2,13 +2,11 @@
 //!
 //! Eventsub websocket connection to Twitch for receiving events from Twitch
 
-use super::{
-    models::{
-        TwitchEvent, TwitchEventAdBreakBegin, TwitchEventChatMsg, TwitchEventCheerBits,
-        TwitchEventFollow, TwitchEventGiftSub, TwitchEventRaid, TwitchEventReSub,
-        TwitchEventRedeem, TwitchEventShoutoutReceive, TwitchEventSub,
-    },
-    TwitchClient,
+use super::TwitchClient;
+use crate::events::{
+    AppEvent, AppEventSender, TwitchEventAdBreakBegin, TwitchEventChatMsg, TwitchEventCheerBits,
+    TwitchEventFollow, TwitchEventGiftSub, TwitchEventRaid, TwitchEventReSub, TwitchEventRedeem,
+    TwitchEventShoutoutReceive, TwitchEventSub,
 };
 use anyhow::Context;
 use axum::async_trait;
@@ -17,7 +15,7 @@ use futures::{
     StreamExt,
 };
 use log::{error, warn};
-use tokio::{net::TcpStream, sync::broadcast, task::AbortHandle};
+use tokio::{net::TcpStream, task::AbortHandle};
 use tokio_tungstenite::{tungstenite, MaybeTlsStream, WebSocketStream};
 use tungstenite::{
     error::ProtocolError as WebsocketProtocolError, Error as TWebsocketError,
@@ -47,7 +45,7 @@ impl Drop for WebsocketManagedTask {
 impl WebsocketManagedTask {
     pub fn create(
         client: TwitchClient,
-        tx: broadcast::Sender<TwitchEvent>,
+        tx: AppEventSender,
         token: UserToken,
     ) -> WebsocketManagedTask {
         let abort_handle = tokio::spawn(async move {
@@ -56,7 +54,7 @@ impl WebsocketManagedTask {
             if let Err(err) = ws.run().await {
                 error!("websocket error: {:?}", err);
 
-                _ = tx_2.send(TwitchEvent::Reset);
+                _ = tx_2.send(AppEvent::TwitchClientReset);
             }
         })
         .abort_handle();
@@ -75,7 +73,7 @@ pub struct WebsocketClient {
     /// The url to use for websocket
     connect_url: String,
     /// Sender for twitch events
-    tx: broadcast::Sender<TwitchEvent>,
+    tx: AppEventSender,
 }
 
 type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
@@ -100,7 +98,7 @@ fn map_message<E: EventSubscription + Clone>(
 
 impl WebsocketClient {
     /// Create a new websocket client
-    pub fn new(client: TwitchClient, tx: broadcast::Sender<TwitchEvent>, token: UserToken) -> Self {
+    pub fn new(client: TwitchClient, tx: AppEventSender, token: UserToken) -> Self {
         Self {
             session_id: None,
             token,
@@ -180,7 +178,7 @@ impl WebsocketClient {
             Event::ChannelPointsCustomRewardRedemptionAddV1(payload) => {
                 let msg: eventsub::channel::ChannelPointsCustomRewardRedemptionAddV1Payload =
                     map_message(payload.message)?;
-                _ = self.tx.send(TwitchEvent::Redeem(TwitchEventRedeem {
+                _ = self.tx.send(AppEvent::Redeem(TwitchEventRedeem {
                     id: msg.id,
                     reward: msg.reward,
                     user_id: msg.user_id,
@@ -193,7 +191,7 @@ impl WebsocketClient {
             // User sends bits
             Event::ChannelCheerV1(payload) => {
                 let msg = map_message(payload.message)?;
-                _ = self.tx.send(TwitchEvent::CheerBits(TwitchEventCheerBits {
+                _ = self.tx.send(AppEvent::CheerBits(TwitchEventCheerBits {
                     bits: msg.bits,
                     anonymous: msg.is_anonymous,
                     user_id: msg.user_id,
@@ -206,7 +204,7 @@ impl WebsocketClient {
             // User follows the channel
             Event::ChannelFollowV2(payload) => {
                 let msg = map_message(payload.message)?;
-                _ = self.tx.send(TwitchEvent::Follow(TwitchEventFollow {
+                _ = self.tx.send(AppEvent::Follow(TwitchEventFollow {
                     user_id: msg.user_id,
                     user_name: msg.user_login,
                     user_display_name: msg.user_name,
@@ -216,7 +214,7 @@ impl WebsocketClient {
             // User subscribes to channel (does not include resub)
             Event::ChannelSubscribeV1(payload) => {
                 let msg = map_message(payload.message)?;
-                _ = self.tx.send(TwitchEvent::Sub(TwitchEventSub {
+                _ = self.tx.send(AppEvent::Sub(TwitchEventSub {
                     is_gift: msg.is_gift,
                     tier: msg.tier,
 
@@ -228,7 +226,7 @@ impl WebsocketClient {
             // User gifts subscription (1 or more)
             Event::ChannelSubscriptionGiftV1(payload) => {
                 let msg = map_message(payload.message)?;
-                _ = self.tx.send(TwitchEvent::GiftSub(TwitchEventGiftSub {
+                _ = self.tx.send(AppEvent::GiftSub(TwitchEventGiftSub {
                     anonymous: msg.is_anonymous,
                     total: msg.total,
                     cumulative_total: msg.cumulative_total,
@@ -241,7 +239,7 @@ impl WebsocketClient {
             // User sends resubscription message (User sub has resubbed, runs when user sends the resub message to chat)
             Event::ChannelSubscriptionMessageV1(payload) => {
                 let msg = map_message(payload.message)?;
-                _ = self.tx.send(TwitchEvent::ResubMsg(TwitchEventReSub {
+                _ = self.tx.send(AppEvent::ResubMsg(TwitchEventReSub {
                     cumulative_months: msg.cumulative_months,
                     duration_months: msg.duration_months,
                     message: msg.message,
@@ -257,7 +255,7 @@ impl WebsocketClient {
             // User sends chat message
             Event::ChannelChatMessageV1(payload) => {
                 let msg = map_message(payload.message)?;
-                _ = self.tx.send(TwitchEvent::ChatMsg(TwitchEventChatMsg {
+                _ = self.tx.send(AppEvent::ChatMsg(TwitchEventChatMsg {
                     message_id: msg.message_id,
                     user_id: msg.chatter_user_id,
                     user_name: msg.chatter_user_login,
@@ -270,48 +268,48 @@ impl WebsocketClient {
             // Channel moderator is added
             Event::ChannelModeratorAddV1(payload) => {
                 let _msg = map_message(payload.message)?;
-                _ = self.tx.send(TwitchEvent::ModeratorsChanged)
+                _ = self.tx.send(AppEvent::ModeratorsChanged)
             }
             // Channel moderator is removed
             Event::ChannelModeratorRemoveV1(payload) => {
                 let _msg = map_message(payload.message)?;
-                _ = self.tx.send(TwitchEvent::ModeratorsChanged)
+                _ = self.tx.send(AppEvent::ModeratorsChanged)
             }
 
             // Channel vip is added
             Event::ChannelVipAddV1(payload) => {
                 let _msg = map_message(payload.message)?;
-                _ = self.tx.send(TwitchEvent::VipsChanged)
+                _ = self.tx.send(AppEvent::VipsChanged)
             }
 
             // Channel vip is removed
             Event::ChannelVipRemoveV1(payload) => {
                 let _msg = map_message(payload.message)?;
-                _ = self.tx.send(TwitchEvent::VipsChanged)
+                _ = self.tx.send(AppEvent::VipsChanged)
             }
 
             // Channel reward is added
             Event::ChannelPointsCustomRewardAddV1(payload) => {
                 let _msg = map_message(payload.message)?;
-                _ = self.tx.send(TwitchEvent::RewardsChanged)
+                _ = self.tx.send(AppEvent::RewardsChanged)
             }
 
             // Channel reward is removed
             Event::ChannelPointsCustomRewardRemoveV1(payload) => {
                 let _msg = map_message(payload.message)?;
-                _ = self.tx.send(TwitchEvent::RewardsChanged)
+                _ = self.tx.send(AppEvent::RewardsChanged)
             }
 
             // Channel reward is update
             Event::ChannelPointsCustomRewardUpdateV1(payload) => {
                 let _msg = map_message(payload.message)?;
-                _ = self.tx.send(TwitchEvent::RewardsChanged)
+                _ = self.tx.send(AppEvent::RewardsChanged)
             }
 
             // Channel is raided
             Event::ChannelRaidV1(payload) => {
                 let msg = map_message(payload.message)?;
-                _ = self.tx.send(TwitchEvent::Raid(TwitchEventRaid {
+                _ = self.tx.send(AppEvent::Raid(TwitchEventRaid {
                     user_id: msg.from_broadcaster_user_id,
                     user_name: msg.from_broadcaster_user_login,
                     user_display_name: msg.from_broadcaster_user_name,
@@ -324,7 +322,7 @@ impl WebsocketClient {
                 let msg = map_message(payload.message)?;
                 _ = self
                     .tx
-                    .send(TwitchEvent::AdBreakBegin(TwitchEventAdBreakBegin {
+                    .send(AppEvent::AdBreakBegin(TwitchEventAdBreakBegin {
                         duration_seconds: msg.duration_seconds,
                     }))
             }
@@ -334,7 +332,7 @@ impl WebsocketClient {
                 let msg = map_message(payload.message)?;
                 _ = self
                     .tx
-                    .send(TwitchEvent::ShoutoutReceive(TwitchEventShoutoutReceive {
+                    .send(AppEvent::ShoutoutReceive(TwitchEventShoutoutReceive {
                         user_id: msg.from_broadcaster_user_id,
                         user_name: msg.from_broadcaster_user_login,
                         user_display_name: msg.from_broadcaster_user_name,

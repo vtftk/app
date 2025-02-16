@@ -1,5 +1,5 @@
-use super::{models::TwitchEvent, websocket::WebsocketManagedTask};
-use crate::database::entity::twitch_access::TwitchAccessModel;
+use super::websocket::WebsocketManagedTask;
+use crate::{database::entity::twitch_access::TwitchAccessModel, events::AppEventSender};
 use anyhow::{anyhow, Context};
 use futures::TryStreamExt;
 use log::{debug, error, info};
@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::{
     join,
-    sync::{broadcast, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    sync::{RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 use twitch_api::{
     helix::{
@@ -69,19 +69,15 @@ pub struct Twitch {
 }
 
 impl Twitch {
-    pub fn new(app_handle: AppHandle) -> (Self, broadcast::Receiver<TwitchEvent>) {
-        let (tx, rx) = broadcast::channel(10);
-        (
-            Self {
-                _inner: Arc::new(TwitchInner {
-                    helix_client: HelixClient::default(),
-                    state: Default::default(),
-                    tx,
-                    app_handle,
-                }),
-            },
-            rx,
-        )
+    pub fn new(app_handle: AppHandle, tx: AppEventSender) -> Self {
+        Self {
+            _inner: Arc::new(TwitchInner {
+                helix_client: HelixClient::default(),
+                state: Default::default(),
+                tx,
+                app_handle,
+            }),
+        }
     }
 
     pub fn create_oauth_uri(&self, redirect_url: reqwest::Url) -> anyhow::Result<String> {
@@ -436,7 +432,7 @@ impl Twitch {
 struct TwitchInner {
     helix_client: HelixClient<'static, reqwest::Client>,
     state: RwLock<TwitchManagerState>,
-    tx: broadcast::Sender<TwitchEvent>,
+    tx: AppEventSender,
     app_handle: AppHandle,
 }
 

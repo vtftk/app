@@ -1,8 +1,8 @@
 use std::str::FromStr;
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 use chrono::Utc;
-use log::error;
+use log::{debug, error};
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Deserializer, Serialize};
 use tokio::join;
@@ -18,14 +18,18 @@ use crate::{
         commands::CommandModel,
         events::{EventModel, EventTrigger, EventTriggerType},
     },
-    twitch::models::{
+    events::{
         TwitchEventAdBreakBegin, TwitchEventChatMsg, TwitchEventCheerBits, TwitchEventFollow,
         TwitchEventGiftSub, TwitchEventRaid, TwitchEventReSub, TwitchEventRedeem,
         TwitchEventShoutoutReceive, TwitchEventSub, TwitchEventUser,
     },
+    twitch::manager::Twitch,
 };
 
+use super::TimerCompleted;
+
 /// Data for matched events to trigger
+#[derive(Default)]
 pub struct EventMatchingData {
     /// List of events to attempt to trigger
     pub events: Vec<EventModel>,
@@ -598,6 +602,53 @@ pub async fn match_ad_break_event(
     })
 }
 
+pub async fn match_timer_complete_event(
+    db: &DatabaseConnection,
+    twitch: &Twitch,
+    event: TimerCompleted,
+) -> anyhow::Result<EventMatchingData> {
+    let event = EventModel::get_by_id(db, event.event_id)
+        .await
+        .context("failed to get event to trigger")?
+        .context("requested timer event does not exist")?;
+
+    // Get minimum amount of chat messages required
+    let min_chat_messages = match &event.trigger {
+        EventTrigger::Timer {
+            min_chat_messages, ..
+        } => *min_chat_messages as u64,
+        _ => {
+            bail!("attempted to execute timer event that was not a timer event");
+        }
+    };
+
+    let user_id = twitch.get_user_id().await;
+
+    // Ensure minimum chat messages has been reached
+    if min_chat_messages > 0 {
+        let last_execution = event
+            .last_execution(db, 0)
+            .await
+            .context("failed to get last execution")?;
+
+        if let Some(last_execution) = last_execution {
+            let message_count =
+                ChatHistoryModel::count_since(db, last_execution.created_at, user_id).await?;
+
+            if message_count < min_chat_messages {
+                debug!("skipping timer execution, not enough chat messages since last execution");
+                return Ok(Default::default());
+            }
+        }
+    }
+
+    Ok(EventMatchingData {
+        events: vec![event],
+        commands: Default::default(),
+        event_data: Default::default(),
+    })
+}
+
 pub async fn match_shoutout_receive_event(
     db: &DatabaseConnection,
     event: TwitchEventShoutoutReceive,
@@ -657,7 +708,7 @@ mod test {
             },
             mock_database,
         },
-        twitch::models::{
+        events::{
             TwitchEventAdBreakBegin, TwitchEventChatMsg, TwitchEventCheerBits, TwitchEventFollow,
             TwitchEventGiftSub, TwitchEventRaid, TwitchEventReSub, TwitchEventRedeem,
             TwitchEventShoutoutReceive, TwitchEventSub,

@@ -13,18 +13,17 @@ use crate::{
             match_ad_break_event, match_chat_event, match_cheer_bits_event, match_follow_event,
             match_gifted_subscription_event, match_raid_event, match_re_subscription_event,
             match_redeem_event, match_shoutout_receive_event, match_subscription_event,
-            CommandWithContext, EventData, EventInputData, EventMatchingData,
+            match_timer_complete_event, CommandWithContext, EventData, EventInputData,
+            EventMatchingData,
         },
         outcome::produce_outcome_message,
+        AppEvent, TwitchEventUser,
     },
     overlay::OverlayMessageSender,
     script::runtime::{
         CommandContext, CommandContextUser, RuntimeExecutionContext, ScriptExecutorHandle,
     },
-    twitch::{
-        manager::Twitch,
-        models::{TwitchEvent, TwitchEventUser},
-    },
+    twitch::manager::Twitch,
 };
 use anyhow::{anyhow, Context};
 use chrono::TimeDelta;
@@ -32,18 +31,20 @@ use futures::{future::BoxFuture, stream::FuturesUnordered};
 use log::{debug, error};
 use sea_orm::{prelude::DateTimeUtc, sqlx::types::chrono::Utc, DatabaseConnection};
 use std::time::Duration;
-use tokio::{sync::broadcast, try_join};
+use tokio::try_join;
 use twitch_api::types::UserId;
 
-pub async fn process_twitch_events(
+use super::AppEventReceiver;
+
+pub async fn process_events(
     db: DatabaseConnection,
     twitch: Twitch,
     script_handle: ScriptExecutorHandle,
     event_sender: OverlayMessageSender,
 
-    mut twitch_event_rx: broadcast::Receiver<TwitchEvent>,
+    mut event_rx: AppEventReceiver,
 ) {
-    while let Ok(event) = twitch_event_rx.recv().await {
+    while let Some(event) = event_rx.recv().await {
         debug!("twitch event received: {:?}", event);
 
         tokio::spawn({
@@ -53,8 +54,7 @@ pub async fn process_twitch_events(
             let event_sender = event_sender.clone();
 
             async move {
-                let result =
-                    process_twitch_event(db, twitch, script_handle, event_sender, event).await;
+                let result = process_event(db, twitch, script_handle, event_sender, event).await;
 
                 if let Err(err) = result {
                     debug!("failed to process twitch event: {err:?}",);
@@ -64,43 +64,44 @@ pub async fn process_twitch_events(
     }
 }
 
-async fn process_twitch_event(
+async fn process_event(
     db: DatabaseConnection,
     twitch: Twitch,
     script_handle: ScriptExecutorHandle,
     event_sender: OverlayMessageSender,
-    event: TwitchEvent,
+    event: AppEvent,
 ) -> anyhow::Result<()> {
     let match_data: EventMatchingData = match event {
         // Matchable events
-        TwitchEvent::Redeem(event) => match_redeem_event(&db, event).await?,
-        TwitchEvent::CheerBits(event) => match_cheer_bits_event(&db, event).await?,
-        TwitchEvent::Follow(event) => match_follow_event(&db, event).await?,
-        TwitchEvent::Sub(event) => match_subscription_event(&db, event).await?,
-        TwitchEvent::GiftSub(event) => match_gifted_subscription_event(&db, event).await?,
-        TwitchEvent::ResubMsg(event) => match_re_subscription_event(&db, event).await?,
-        TwitchEvent::ChatMsg(event) => match_chat_event(&db, event).await?,
-        TwitchEvent::Raid(event) => match_raid_event(&db, event).await?,
-        TwitchEvent::AdBreakBegin(event) => match_ad_break_event(&db, event).await?,
-        TwitchEvent::ShoutoutReceive(event) => match_shoutout_receive_event(&db, event).await?,
+        AppEvent::Redeem(event) => match_redeem_event(&db, event).await?,
+        AppEvent::CheerBits(event) => match_cheer_bits_event(&db, event).await?,
+        AppEvent::Follow(event) => match_follow_event(&db, event).await?,
+        AppEvent::Sub(event) => match_subscription_event(&db, event).await?,
+        AppEvent::GiftSub(event) => match_gifted_subscription_event(&db, event).await?,
+        AppEvent::ResubMsg(event) => match_re_subscription_event(&db, event).await?,
+        AppEvent::ChatMsg(event) => match_chat_event(&db, event).await?,
+        AppEvent::Raid(event) => match_raid_event(&db, event).await?,
+        AppEvent::AdBreakBegin(event) => match_ad_break_event(&db, event).await?,
+        AppEvent::ShoutoutReceive(event) => match_shoutout_receive_event(&db, event).await?,
+        AppEvent::TimerCompleted(event) => match_timer_complete_event(&db, &twitch, event).await?,
 
         // Internal events
-        TwitchEvent::ModeratorsChanged => {
+        AppEvent::ModeratorsChanged => {
             debug!("reloading mods list");
             twitch.load_moderator_list().await?;
             return Ok(());
         }
-        TwitchEvent::VipsChanged => {
+        AppEvent::VipsChanged => {
             debug!("reloading vips list");
             twitch.load_vip_list().await?;
             return Ok(());
         }
-        TwitchEvent::RewardsChanged => {
+        AppEvent::RewardsChanged => {
             debug!("reloading rewards list");
             twitch.load_rewards_list().await?;
             return Ok(());
         }
-        TwitchEvent::Reset => {
+        AppEvent::TwitchClientReset => {
             debug!("resetting twitch manager");
             twitch.reset().await;
             return Ok(());

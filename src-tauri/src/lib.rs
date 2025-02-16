@@ -1,10 +1,7 @@
 use anyhow::Context;
 use commands::events::update_scheduler_events;
 use database::{clean_old_data, entity::app_data::AppDataModel};
-use events::{
-    processing::process_twitch_events,
-    scheduler::{create_scheduler, SchedulerContext},
-};
+use events::{processing::process_events, scheduler::create_scheduler};
 use overlay::{create_overlay_channel, OverlayDataStore};
 use script::runtime::{create_script_executor, ScriptRuntimeData};
 use sea_orm::DatabaseConnection;
@@ -14,6 +11,7 @@ use tauri::{
     async_runtime::{block_on, spawn},
     App, AppHandle, Manager, RunEvent,
 };
+use tokio::sync::mpsc;
 use twitch::manager::Twitch;
 
 mod commands;
@@ -122,9 +120,10 @@ fn setup(app: &mut App) -> Result<(), Box<dyn Error>> {
     let db = block_on(database::connect_database(app_data_path.join("app.db")))
         .context("failed to load database")?;
 
-    let (twitch, twitch_event_rx) = Twitch::new(handle.clone());
+    let (event_tx, event_rx) = mpsc::channel(10);
     let (overlay_tx, overlay_rx) = create_overlay_channel();
 
+    let twitch = Twitch::new(handle.clone(), event_tx.clone());
     let overlay_data = OverlayDataStore::new(handle.clone());
 
     let script_handle = create_script_executor(
@@ -137,12 +136,7 @@ fn setup(app: &mut App) -> Result<(), Box<dyn Error>> {
     );
 
     // Create background event scheduler
-    let scheduler_handle = create_scheduler(SchedulerContext::new(
-        db.clone(),
-        twitch.clone(),
-        script_handle.clone(),
-        overlay_tx.clone(),
-    ));
+    let scheduler_handle = create_scheduler(event_tx);
 
     let storage = Storage::new_fs(handle)?;
 
@@ -185,12 +179,12 @@ fn setup(app: &mut App) -> Result<(), Box<dyn Error>> {
     });
 
     // Handle events triggered by twitch
-    _ = spawn(process_twitch_events(
+    _ = spawn(process_events(
         db.clone(),
         twitch.clone(),
         script_handle,
-        overlay_tx.clone(),
-        twitch_event_rx,
+        overlay_tx,
+        event_rx,
     ));
 
     // Run HTTP server
@@ -200,7 +194,7 @@ fn setup(app: &mut App) -> Result<(), Box<dyn Error>> {
         handle.clone(),
         twitch,
         overlay_data,
-        storage.clone(),
+        storage,
     ));
 
     tray::create_tray_menu(app)?;
