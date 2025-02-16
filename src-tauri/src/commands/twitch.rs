@@ -1,5 +1,7 @@
 use crate::commands::CmdResult;
 use crate::database::entity::app_data::AppDataModel;
+use crate::database::entity::secrets::SecretModel;
+use crate::database::entity::TWITCH_SECRET_KEY;
 use crate::twitch::manager::Twitch;
 use anyhow::Context;
 use reqwest::Url;
@@ -48,7 +50,12 @@ pub async fn is_authenticated(twitch: tauri::State<'_, Twitch>) -> CmdResult<boo
 }
 
 #[tauri::command]
-pub async fn logout(twitch: tauri::State<'_, Twitch>) -> CmdResult<()> {
+pub async fn logout(
+    twitch: tauri::State<'_, Twitch>,
+    db: tauri::State<'_, DatabaseConnection>,
+) -> CmdResult<()> {
     twitch.reset().await;
+    SecretModel::delete(db.inner(), TWITCH_SECRET_KEY).await?;
+
     Ok(())
 }

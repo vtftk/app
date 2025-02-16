@@ -1,5 +1,8 @@
 use crate::{
-    database::entity::vt_access::{SetVTAccess, VTAccessModel},
+    database::entity::{
+        secrets::{SecretModel, SetSecret},
+        VT_SECRET_KEY,
+    },
     http::{
         error::{DynHttpError, HttpResult},
         models::{GetAuthTokenResponse, SetAuthTokenRequest},
@@ -14,7 +17,7 @@ use axum::{
     Extension, Json,
 };
 use reqwest::header::{CACHE_CONTROL, CONTENT_TYPE};
-use sea_orm::{DatabaseConnection, ModelTrait};
+use sea_orm::DatabaseConnection;
 use tauri::{path::BaseDirectory, AppHandle, Manager};
 
 /// GET /content/:folder/:name  
@@ -83,20 +86,21 @@ pub async fn handle_set_auth_token(
 ) -> HttpResult<()> {
     if let Some(access_token) = req.auth_token {
         // Set new access token
-        VTAccessModel::set(&db, SetVTAccess { access_token })
-            .await
-            .context("failed to update access")?;
+        SecretModel::set(
+            &db,
+            SetSecret {
+                key: VT_SECRET_KEY.to_string(),
+                value: access_token,
+                metadata: serde_json::Value::Null,
+            },
+        )
+        .await
+        .context("failed to store vt access token")?;
     } else {
         // Clear existing access token
-        let access = VTAccessModel::get(&db)
+        SecretModel::delete(&db, VT_SECRET_KEY)
             .await
-            .context("failed to get access")?;
-        if let Some(access) = access {
-            access
-                .delete(&db)
-                .await
-                .context("failed to delete original token")?;
-        }
+            .context("failed to delete original token")?;
     }
 
     Ok(Json(()))
@@ -108,11 +112,11 @@ pub async fn handle_set_auth_token(
 pub async fn handle_get_auth_token(
     Extension(db): Extension<DatabaseConnection>,
 ) -> HttpResult<GetAuthTokenResponse> {
-    let access = VTAccessModel::get(&db)
+    let secret = SecretModel::get(&db, VT_SECRET_KEY)
         .await
         .context("failed to get access")?;
 
     Ok(Json(GetAuthTokenResponse {
-        auth_token: access.map(|access| access.access_token),
+        auth_token: secret.map(|access| access.value),
     }))
 }

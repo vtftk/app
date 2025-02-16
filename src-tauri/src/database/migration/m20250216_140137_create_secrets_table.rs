@@ -9,12 +9,12 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(TwitchAccess::Table)
+                    .table(Secrets::Table)
                     .if_not_exists()
-                    .col(pk_auto(TwitchAccess::Id))
-                    .col(string(TwitchAccess::AccessToken))
-                    .col(json(TwitchAccess::Scopes))
-                    .col(date_time(TwitchAccess::CreatedAt))
+                    .col(string(Secrets::Key).primary_key().to_owned())
+                    .col(string(Secrets::Value))
+                    .col(json(Secrets::Metadata))
+                    .col(date_time(Secrets::CreatedAt))
                     .to_owned(),
             )
             .await
@@ -22,16 +22,19 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .drop_table(Table::drop().table(TwitchAccess::Table).to_owned())
+            .drop_table(Table::drop().table(Secrets::Table).to_owned())
             .await
     }
 }
 
 #[derive(DeriveIden)]
-enum TwitchAccess {
+enum Secrets {
     Table,
-    Id,
-    AccessToken,
-    Scopes,
+    /// Unique key the secret is stored under
+    Key,
+    /// Value of the secret
+    Value,
+    /// Additional metadata stored with the secret
+    Metadata,
     CreatedAt,
 }

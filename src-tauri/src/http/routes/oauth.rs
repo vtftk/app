@@ -1,8 +1,12 @@
 use crate::{
-    database::entity::twitch_access::{SetTwitchAccess, TwitchAccessModel},
+    database::entity::{
+        secrets::{SecretModel, SetSecret},
+        TWITCH_SECRET_KEY,
+    },
     http::error::HttpResult,
     twitch::manager::Twitch,
 };
+use anyhow::Context;
 use axum::{response::IntoResponse, Extension, Json};
 use reqwest::header::CONTENT_TYPE;
 use sea_orm::DatabaseConnection;
@@ -44,14 +48,17 @@ pub async fn handle_oauth_complete(
 
     twitch.set_authenticated(token).await;
 
-    TwitchAccessModel::set(
+    // Set new access token
+    SecretModel::set(
         &db,
-        SetTwitchAccess {
-            access_token,
-            scopes,
+        SetSecret {
+            key: TWITCH_SECRET_KEY.to_string(),
+            value: access_token.secret().to_string(),
+            metadata: serde_json::to_value(scopes).context("failed to encode tokens")?,
         },
     )
-    .await?;
+    .await
+    .context("failed to store access token")?;
 
     Ok(Json(()))
 }

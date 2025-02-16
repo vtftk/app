@@ -12,7 +12,9 @@ pub mod items_sounds;
 pub mod key_value;
 pub mod links;
 pub mod model_data;
+pub mod secrets;
 pub mod shared;
 pub mod sounds;
-pub mod twitch_access;
-pub mod vt_access;
+
+pub const TWITCH_SECRET_KEY: &str = "__TWITCH_SECRET__";
+pub const VT_SECRET_KEY: &str = "__VT_STUDIO_SECRET__";

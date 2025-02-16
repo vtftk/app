@@ -1,5 +1,8 @@
 use super::websocket::WebsocketManagedTask;
-use crate::{database::entity::twitch_access::TwitchAccessModel, events::AppEventSender};
+use crate::{
+    database::entity::{secrets::SecretModel, TWITCH_SECRET_KEY},
+    events::AppEventSender,
+};
 use anyhow::{anyhow, Context};
 use futures::TryStreamExt;
 use log::{debug, error, info};
@@ -90,7 +93,7 @@ impl Twitch {
 
     /// Attempts to authenticate with twitch using an existing access token (From the database)
     pub async fn attempt_auth_stored(&self, db: DatabaseConnection) {
-        let access = match TwitchAccessModel::get(&db).await {
+        let secret = match SecretModel::get(&db, TWITCH_SECRET_KEY).await {
             Ok(Some(value)) => value,
             Ok(None) => {
                 debug!("not authenticated, skipping login");
@@ -102,15 +105,18 @@ impl Twitch {
             }
         };
 
-        let access_token = access.access_token.0.clone();
-        let scopes = &access.scopes.0;
+        let access_token = AccessToken::new(secret.value.to_string());
+        let scopes: Vec<Scope> = match serde_json::from_value(secret.metadata.0.clone()) {
+            Ok(value) => value,
+            Err(_) => return,
+        };
 
         for required_scope in TWITCH_REQUIRED_SCOPES {
             if !scopes.contains(required_scope) {
                 info!("logging out current access token, missing required scope");
 
                 // Clear outdated / invalid access token
-                _ = access.delete(&db).await;
+                _ = secret.delete(&db).await;
                 return;
             }
         }
@@ -119,7 +125,7 @@ impl Twitch {
             error!("stored access token is invalid: {}", err);
 
             // Clear outdated / invalid access token
-            _ = access.delete(&db).await;
+            _ = secret.delete(&db).await;
         }
     }
 
