@@ -11,8 +11,8 @@ import {
 } from "./physics";
 import {
   MinMax,
-  AppData,
   ModelId,
+  OverlayConfig,
   ThrowDirection,
   ItemImageConfig,
   ModelCalibration,
@@ -35,7 +35,7 @@ export function setPhysicsEngineConfig(config: PhysicsEngineConfig) {
  * Throws an item
  *
  * @param socket Socket for getting model position and sending impact flinches to VTube studio
- * @param appData Global app data settings
+ * @param overlayConfig Global app data settings
  * @param modelCalibration Calibration data for available models
  * @param modelParameters Parameters for the current model
  * @param config Configuration for the thrown item
@@ -46,7 +46,7 @@ export function setPhysicsEngineConfig(config: PhysicsEngineConfig) {
  */
 export async function throwItem(
   socket: VTubeStudioWebSocket,
-  appData: AppData,
+  overlayConfig: OverlayConfig,
   modelCalibration: Map<ModelId, ModelCalibration>,
   modelParameters: ModelParameters,
   config: ItemWithSoundIds,
@@ -64,7 +64,7 @@ export async function throwItem(
   // Model is not available
   if (!modelPosition) return;
 
-  const { throwables_config: throwables } = appData;
+  const { throwables_config: throwables } = overlayConfig;
 
   // Determine scale of the model relative to the calibrated minimum and maximum sizes
   const modelScale =
@@ -96,7 +96,7 @@ export async function throwItem(
     if (windupAudio !== null) {
       try {
         windupAudio.sound.volume =
-          appData.sounds_config.global_volume * windupAudio.config.volume;
+          overlayConfig.sounds_config.global_volume * windupAudio.config.volume;
         windupAudio.sound.play();
       } catch (err) {
         console.error("failed to play windup audio", err);
@@ -149,7 +149,7 @@ export async function throwItem(
   // Handle point of impact
   handleThrowableImpact(
     socket,
-    appData,
+    overlayConfig,
     modelParameters,
     config,
     impactAudio,
@@ -158,7 +158,7 @@ export async function throwItem(
   );
 
   // No physics to apply
-  if (!appData.physics_config.enabled) {
+  if (!overlayConfig.physics_config.enabled) {
     // Wait remaining duration before removing
     await sleep(throwables.duration / 2);
     // Remove after complete
@@ -169,7 +169,7 @@ export async function throwItem(
 
   // Initialize the physics engine
   if (physicsEngine === null) {
-    const { fps, gravity_multiplier } = appData.physics_config;
+    const { fps, gravity_multiplier } = overlayConfig.physics_config;
 
     physicsEngine = createPhysicsEngine({
       fps: fps,
@@ -182,7 +182,8 @@ export async function throwItem(
   pivot.style.transform = "";
   thrown.style.transform = "";
 
-  const { horizontal_multiplier, vertical_multiplier } = appData.physics_config;
+  const { horizontal_multiplier, vertical_multiplier } =
+    overlayConfig.physics_config;
 
   const randomVelocity = Math.random();
 
@@ -245,7 +246,7 @@ function isRandomDirectionLeft(
  * Handles the point of impact for a throwable hitting the model
  *
  * @param socket Socket for sending impact flinches to VTube studio
- * @param appData Global app data settings
+ * @param overlayConfig Global app data settings
  * @param modelParameters Parameters for the current model
  * @param config Configuration for the thrown item
  * @param impactAudio Audio element to play when the item impacts the target
@@ -254,7 +255,7 @@ function isRandomDirectionLeft(
  */
 function handleThrowableImpact(
   socket: VTubeStudioWebSocket,
-  appData: AppData,
+  overlayConfig: OverlayConfig,
   modelParameters: ModelParameters,
   config: ItemWithSoundIds,
   impactAudio: LoadedSoundData | null,
@@ -265,7 +266,7 @@ function handleThrowableImpact(
   if (impactAudio !== null) {
     try {
       impactAudio.sound.volume =
-        appData.sounds_config.global_volume * impactAudio.config.volume;
+        overlayConfig.sounds_config.global_volume * impactAudio.config.volume;
 
       impactAudio.sound.play();
     } catch (err) {
@@ -278,7 +279,7 @@ function handleThrowableImpact(
   // Make the VTuber model flinch from the impact
   flinch(socket, modelParameters, {
     angle,
-    eyeState: appData.model_config.eyes_on_hit,
+    eyeState: overlayConfig.model_config.eyes_on_hit,
     magnitude: image.weight,
     leftSide,
     returnSpeed: 0.3,

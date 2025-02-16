@@ -5,8 +5,13 @@ export type MinMax = {
   max: number;
 };
 
-export type AppData = {
+export type AppData = AppConfig & OverlayConfig;
+
+export type AppConfig = {
   main_config: MainConfig;
+};
+
+export type OverlayConfig = {
   throwables_config: ThrowablesConfig;
   sounds_config: SoundsConfig;
   model_config: ModelConfig;

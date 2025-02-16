@@ -54,8 +54,8 @@ pub async fn set_app_data(
     let model = AppDataModel::set(db.inner(), app_data).await?;
 
     // Inform the overlay of the new app data
-    _ = event_sender.send(OverlayMessage::AppDataUpdated {
-        app_data: Box::new(model.data),
+    _ = event_sender.send(OverlayMessage::ConfigUpdated {
+        config: Box::new(model.data.overlay),
     });
 
     Ok(true)

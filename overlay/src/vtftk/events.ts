@@ -16,8 +16,8 @@ import {
   executeInterval,
 } from "../utils";
 import {
-  AppData,
   ModelId,
+  OverlayConfig,
   ItemWithSounds,
   ThrowItemConfig,
   ModelCalibration,
@@ -27,7 +27,7 @@ import {
 } from "./types";
 
 export type EventSourceData = {
-  appData: AppData;
+  overlayConfig: OverlayConfig;
   vtSocket: VTubeStudioWebSocket | undefined;
   modelCalibration: Map<ModelId, ModelCalibration>;
   modelParameters: ModelParameters | undefined;
@@ -58,7 +58,7 @@ async function onMessage(data: EventSourceData, event: any) {
     case "ThrowItem": {
       if (data.vtSocket && data.modelParameters) {
         onThrowItemEvent(
-          data.appData,
+          data.overlayConfig,
           data.vtSocket,
           data.modelCalibration,
           data.modelParameters,
@@ -92,7 +92,7 @@ async function onMessage(data: EventSourceData, event: any) {
 
     case "PlaySound": {
       if (data.vtSocket) {
-        onPlaySoundEvent(data.appData, event.config);
+        onPlaySoundEvent(data.overlayConfig, event.config);
       }
 
       break;
@@ -100,14 +100,14 @@ async function onMessage(data: EventSourceData, event: any) {
 
     case "PlaySoundSeq": {
       if (data.vtSocket) {
-        onPlaySoundSeqEvent(data.appData, event.configs);
+        onPlaySoundSeqEvent(data.overlayConfig, event.configs);
       }
 
       break;
     }
 
-    case "AppDataUpdated": {
-      onAppDataUpdatedEvent(data, event.app_data);
+    case "ConfigUpdated": {
+      onConfigUpdatedEvent(data, event.config);
       break;
     }
 
@@ -135,11 +135,14 @@ async function onMessage(data: EventSourceData, event: any) {
   }
 }
 
-function onAppDataUpdatedEvent(data: EventSourceData, appData: AppData) {
-  data.appData = appData;
+function onConfigUpdatedEvent(
+  data: EventSourceData,
+  overlayConfig: OverlayConfig,
+) {
+  data.overlayConfig = overlayConfig;
 
   // Recreate the physics engine
-  const { fps, gravity_multiplier } = appData.physics_config;
+  const { fps, gravity_multiplier } = overlayConfig.physics_config;
   setPhysicsEngineConfig({
     fps: fps,
     gravityMultiplier: gravity_multiplier,
@@ -159,14 +162,17 @@ async function onUpdateHotkeysEvent(vtSocket: VTubeStudioWebSocket) {
   return hotkeys;
 }
 
-async function onPlaySoundEvent(appData: AppData, config: PartialSoundModel) {
+async function onPlaySoundEvent(
+  overlayConfig: OverlayConfig,
+  config: PartialSoundModel,
+) {
   const audio = await loadAudio(config.src);
-  audio.volume = config.volume * appData.sounds_config.global_volume;
+  audio.volume = config.volume * overlayConfig.sounds_config.global_volume;
   audio.play();
 }
 
 async function onPlaySoundSeqEvent(
-  appData: AppData,
+  appData: OverlayConfig,
   configs: PartialSoundModel[],
 ) {
   const sounds = await loadSounds(configs);
@@ -252,7 +258,7 @@ async function onMoveModelEvent(
 }
 
 async function onThrowItemEvent(
-  appData: AppData,
+  overlayConfig: OverlayConfig,
   vtSocket: VTubeStudioWebSocket,
   modelCalibration: Map<ModelId, ModelCalibration>,
   modelParameters: ModelParameters,
@@ -267,7 +273,7 @@ async function onThrowItemEvent(
   if (config.type === ThrowItemConfigType.All) {
     await throwItemMany(
       vtSocket,
-      appData,
+      overlayConfig,
       modelCalibration,
       modelParameters,
       items.items,
@@ -280,7 +286,7 @@ async function onThrowItemEvent(
       async () => {
         return throwItemMany(
           vtSocket,
-          appData,
+          overlayConfig,
           modelCalibration,
           modelParameters,
           items.items,
@@ -341,7 +347,7 @@ function pickRandomItem(items: ItemWithSoundIds[], images: LoadedItemMap) {
 
 function throwRandomItem(
   socket: VTubeStudioWebSocket,
-  appData: AppData,
+  overlayConfig: OverlayConfig,
   modelCalibration: Map<ModelId, ModelCalibration>,
   modelParameters: ModelParameters,
 
@@ -366,7 +372,7 @@ function throwRandomItem(
 
   return throwItem(
     socket,
-    appData,
+    overlayConfig,
     modelCalibration,
 
     modelParameters,
@@ -379,7 +385,7 @@ function throwRandomItem(
 
 async function throwItemMany(
   socket: VTubeStudioWebSocket,
-  appData: AppData,
+  overlayConfig: OverlayConfig,
   modelCalibration: Map<ModelId, ModelCalibration>,
   modelParameters: ModelParameters,
 
@@ -391,7 +397,7 @@ async function throwItemMany(
   if (amount === 1) {
     return throwRandomItem(
       socket,
-      appData,
+      overlayConfig,
       modelCalibration,
       modelParameters,
       items,
@@ -404,7 +410,7 @@ async function throwItemMany(
     Array.from(Array(amount)).map(() =>
       throwRandomItem(
         socket,
-        appData,
+        overlayConfig,
         modelCalibration,
         modelParameters,
         items,

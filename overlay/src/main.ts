@@ -1,13 +1,16 @@
 import "./styles/app.css";
 import "./vtftk/events";
 import "./vtftk/calibration";
-import { getAppData } from "./vtftk/appData";
 import { RuntimeAppData } from "./vtftk/types";
 import { subscribeEvent } from "./vtube-studio/event";
 import { attemptAuthorization } from "./vtube-studio/auth";
 import { VTubeStudioWebSocket } from "./vtube-studio/socket";
 import { EventSourceData, createEventSource } from "./vtftk/events";
-import { updateRuntimeData, getCalibrationData } from "./vtftk/api";
+import {
+  getOverlayConfig,
+  updateRuntimeData,
+  getCalibrationData,
+} from "./vtftk/api";
 import {
   requestCurrentModel,
   createModelParameters,
@@ -22,10 +25,10 @@ async function load() {
     vtube_studio_auth: false,
   });
 
-  const appData = await getAppData();
+  const overlayConfig = await getOverlayConfig();
 
   const eventSourceData: EventSourceData = {
-    appData,
+    overlayConfig: overlayConfig,
     modelCalibration: new Map(),
     vtSocket: undefined,
     modelParameters: undefined,
@@ -40,8 +43,8 @@ async function load() {
   const eventSource = createEventSource(eventSourceData);
 
   const vtSocket = new VTubeStudioWebSocket(
-    appData.vtube_studio_config.host,
-    appData.vtube_studio_config.port,
+    overlayConfig.vtube_studio_config.host,
+    overlayConfig.vtube_studio_config.port,
   );
 
   eventSourceData.vtSocket = vtSocket;

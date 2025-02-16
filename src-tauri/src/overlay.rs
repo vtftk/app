@@ -1,5 +1,5 @@
 use crate::{
-    database::entity::{app_data::AppData, items::ItemConfig, sounds::PartialSoundModel},
+    database::entity::{app_data::OverlayConfig, items::ItemConfig, sounds::PartialSoundModel},
     http::models::CalibrationStep,
 };
 use axum::response::sse::Event;
@@ -103,8 +103,8 @@ pub enum OverlayMessage {
 
     /// Tell the overlay to reload the app data as it
     /// has changed
-    AppDataUpdated {
-        app_data: Box<AppData>,
+    ConfigUpdated {
+        config: Box<OverlayConfig>,
     },
 }
 

@@ -1,8 +1,5 @@
 use crate::{
-    database::entity::{
-        app_data::{AppData, AppDataModel},
-        vt_access::{SetVTAccess, VTAccessModel},
-    },
+    database::entity::vt_access::{SetVTAccess, VTAccessModel},
     http::{
         error::{DynHttpError, HttpResult},
         models::{GetAuthTokenResponse, SetAuthTokenRequest},
@@ -19,16 +16,6 @@ use axum::{
 use reqwest::header::{CACHE_CONTROL, CONTENT_TYPE};
 use sea_orm::{DatabaseConnection, ModelTrait};
 use tauri::{path::BaseDirectory, AppHandle, Manager};
-
-/// GET /app-data
-///
-/// Obtain the current app data configuration. Contains stored
-/// state such as calibration and throwables configuration
-pub async fn get_app_data(Extension(db): Extension<DatabaseConnection>) -> HttpResult<AppData> {
-    let data = AppDataModel::get_or_default(&db).await?;
-
-    Ok(Json(data))
-}
 
 /// GET /content/:folder/:name  
 ///
