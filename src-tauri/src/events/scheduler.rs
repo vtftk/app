@@ -183,6 +183,17 @@ async fn execute_scheduled_event(event_id: Uuid, ctx: SchedulerContext) -> anyho
 }
 
 impl SchedulerEventLoop {
+    fn execute_event(event_id: Uuid, ctx: SchedulerContext) {
+        // Trigger the event
+        tauri::async_runtime::spawn({
+            async move {
+                if let Err(err) = execute_scheduled_event(event_id, ctx).await {
+                    error!("error while executing event outcome (in timer): {err:?}");
+                }
+            }
+        });
+    }
+
     fn poll_inner(&mut self, cx: &mut std::task::Context<'_>) -> Poll<()> {
         // Accept messages to update the events list
         while let Poll::Ready(Some(events)) = self.rx.poll_recv(cx) {
@@ -206,26 +217,17 @@ impl SchedulerEventLoop {
             self.current_sleep = None;
 
             // Value should always be present when we have awaited a sleep state
-            let ScheduledEvent {
-                event_id, interval, ..
-            } = match self.events.pop() {
+            let event = match self.events.pop() {
                 Some(value) => value,
                 None => return Poll::Pending,
             };
 
             // Trigger the event
-            tauri::async_runtime::spawn({
-                let ctx = self.ctx.clone();
-
-                async move {
-                    if let Err(err) = execute_scheduled_event(event_id, ctx).await {
-                        error!("error while executing event outcome (in timer): {err:?}");
-                    }
-                }
-            });
+            Self::execute_event(event.event_id, self.ctx.clone());
 
             // Create the next iteration of the event
-            self.events.push(create_scheduled_event(event_id, interval));
+            self.events
+                .push(create_scheduled_event(event.event_id, event.interval));
 
             // Emit event
             return Poll::Ready(());
