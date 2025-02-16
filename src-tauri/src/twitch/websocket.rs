@@ -14,7 +14,7 @@ use futures::{
     future::{try_join_all, BoxFuture},
     StreamExt,
 };
-use log::{error, warn};
+use log::{debug, error, warn};
 use tokio::{net::TcpStream, task::AbortHandle};
 use tokio_tungstenite::{tungstenite, MaybeTlsStream, WebSocketStream};
 use tungstenite::{
@@ -163,7 +163,7 @@ impl WebsocketClient {
 
             // Handle expected messages
             EventsubWebsocketData::Notification { payload, .. } => {
-                self.handle_notification(payload)?
+                self.handle_notification(payload).await?
             }
 
             _ => {}
@@ -172,56 +172,70 @@ impl WebsocketClient {
         Ok(())
     }
 
-    fn handle_notification(&mut self, event: Event) -> anyhow::Result<()> {
+    async fn handle_notification(&mut self, event: Event) -> anyhow::Result<()> {
+        debug!("twitch event {event:?}");
+
         match event {
             // Channel points are redeemed for reward
             Event::ChannelPointsCustomRewardRedemptionAddV1(payload) => {
                 let msg: eventsub::channel::ChannelPointsCustomRewardRedemptionAddV1Payload =
                     map_message(payload.message)?;
-                _ = self.tx.send(AppEvent::Redeem(TwitchEventRedeem {
-                    id: msg.id,
-                    reward: msg.reward,
-                    user_id: msg.user_id,
-                    user_name: msg.user_login,
-                    user_display_name: msg.user_name,
-                    user_input: msg.user_input,
-                }));
+                self.tx
+                    .send(AppEvent::Redeem(TwitchEventRedeem {
+                        id: msg.id,
+                        reward: msg.reward,
+                        user_id: msg.user_id,
+                        user_name: msg.user_login,
+                        user_display_name: msg.user_name,
+                        user_input: msg.user_input,
+                    }))
+                    .await
+                    .context("failed to send event")?;
             }
 
             // User sends bits
             Event::ChannelCheerV1(payload) => {
                 let msg = map_message(payload.message)?;
-                _ = self.tx.send(AppEvent::CheerBits(TwitchEventCheerBits {
-                    bits: msg.bits,
-                    anonymous: msg.is_anonymous,
-                    user_id: msg.user_id,
-                    user_name: msg.user_login,
-                    user_display_name: msg.user_name,
-                    message: msg.message,
-                }));
+                self.tx
+                    .send(AppEvent::CheerBits(TwitchEventCheerBits {
+                        bits: msg.bits,
+                        anonymous: msg.is_anonymous,
+                        user_id: msg.user_id,
+                        user_name: msg.user_login,
+                        user_display_name: msg.user_name,
+                        message: msg.message,
+                    }))
+                    .await
+                    .context("failed to send event")?;
             }
 
             // User follows the channel
             Event::ChannelFollowV2(payload) => {
                 let msg = map_message(payload.message)?;
-                _ = self.tx.send(AppEvent::Follow(TwitchEventFollow {
-                    user_id: msg.user_id,
-                    user_name: msg.user_login,
-                    user_display_name: msg.user_name,
-                }));
+                self.tx
+                    .send(AppEvent::Follow(TwitchEventFollow {
+                        user_id: msg.user_id,
+                        user_name: msg.user_login,
+                        user_display_name: msg.user_name,
+                    }))
+                    .await
+                    .context("failed to send event")?;
             }
 
             // User subscribes to channel (does not include resub)
             Event::ChannelSubscribeV1(payload) => {
                 let msg = map_message(payload.message)?;
-                _ = self.tx.send(AppEvent::Sub(TwitchEventSub {
-                    is_gift: msg.is_gift,
-                    tier: msg.tier,
+                self.tx
+                    .send(AppEvent::Sub(TwitchEventSub {
+                        is_gift: msg.is_gift,
+                        tier: msg.tier,
 
-                    user_id: msg.user_id,
-                    user_name: msg.user_login,
-                    user_display_name: msg.user_name,
-                }));
+                        user_id: msg.user_id,
+                        user_name: msg.user_login,
+                        user_display_name: msg.user_name,
+                    }))
+                    .await
+                    .context("failed to send event")?;
             }
             // User gifts subscription (1 or more)
             Event::ChannelSubscriptionGiftV1(payload) => {
@@ -239,105 +253,137 @@ impl WebsocketClient {
             // User sends resubscription message (User sub has resubbed, runs when user sends the resub message to chat)
             Event::ChannelSubscriptionMessageV1(payload) => {
                 let msg = map_message(payload.message)?;
-                _ = self.tx.send(AppEvent::ResubMsg(TwitchEventReSub {
-                    cumulative_months: msg.cumulative_months,
-                    duration_months: msg.duration_months,
-                    message: msg.message,
-                    streak_months: msg.streak_months,
-                    tier: msg.tier,
+                self.tx
+                    .send(AppEvent::ResubMsg(TwitchEventReSub {
+                        cumulative_months: msg.cumulative_months,
+                        duration_months: msg.duration_months,
+                        message: msg.message,
+                        streak_months: msg.streak_months,
+                        tier: msg.tier,
 
-                    user_id: msg.user_id,
-                    user_name: msg.user_login,
-                    user_display_name: msg.user_name,
-                }));
+                        user_id: msg.user_id,
+                        user_name: msg.user_login,
+                        user_display_name: msg.user_name,
+                    }))
+                    .await
+                    .context("failed to send event")?;
             }
 
             // User sends chat message
             Event::ChannelChatMessageV1(payload) => {
                 let msg = map_message(payload.message)?;
-                _ = self.tx.send(AppEvent::ChatMsg(TwitchEventChatMsg {
-                    message_id: msg.message_id,
-                    user_id: msg.chatter_user_id,
-                    user_name: msg.chatter_user_login,
-                    user_display_name: msg.chatter_user_name,
-                    message: msg.message,
-                    cheer: msg.cheer,
-                }));
+                self.tx
+                    .send(AppEvent::ChatMsg(TwitchEventChatMsg {
+                        message_id: msg.message_id,
+                        user_id: msg.chatter_user_id,
+                        user_name: msg.chatter_user_login,
+                        user_display_name: msg.chatter_user_name,
+                        message: msg.message,
+                        cheer: msg.cheer,
+                    }))
+                    .await
+                    .context("failed to send event")?;
             }
 
             // Channel moderator is added
             Event::ChannelModeratorAddV1(payload) => {
                 let _msg = map_message(payload.message)?;
-                _ = self.tx.send(AppEvent::ModeratorsChanged)
+                self.tx
+                    .send(AppEvent::ModeratorsChanged)
+                    .await
+                    .context("failed to send event")?;
             }
             // Channel moderator is removed
             Event::ChannelModeratorRemoveV1(payload) => {
                 let _msg = map_message(payload.message)?;
-                _ = self.tx.send(AppEvent::ModeratorsChanged)
+                self.tx
+                    .send(AppEvent::ModeratorsChanged)
+                    .await
+                    .context("failed to send event")?;
             }
 
             // Channel vip is added
             Event::ChannelVipAddV1(payload) => {
                 let _msg = map_message(payload.message)?;
-                _ = self.tx.send(AppEvent::VipsChanged)
+                self.tx
+                    .send(AppEvent::VipsChanged)
+                    .await
+                    .context("failed to send event")?;
             }
 
             // Channel vip is removed
             Event::ChannelVipRemoveV1(payload) => {
                 let _msg = map_message(payload.message)?;
-                _ = self.tx.send(AppEvent::VipsChanged)
+                self.tx
+                    .send(AppEvent::VipsChanged)
+                    .await
+                    .context("failed to send event")?;
             }
 
             // Channel reward is added
             Event::ChannelPointsCustomRewardAddV1(payload) => {
                 let _msg = map_message(payload.message)?;
-                _ = self.tx.send(AppEvent::RewardsChanged)
+                self.tx
+                    .send(AppEvent::RewardsChanged)
+                    .await
+                    .context("failed to send event")?;
             }
 
             // Channel reward is removed
             Event::ChannelPointsCustomRewardRemoveV1(payload) => {
                 let _msg = map_message(payload.message)?;
-                _ = self.tx.send(AppEvent::RewardsChanged)
+                self.tx
+                    .send(AppEvent::RewardsChanged)
+                    .await
+                    .context("failed to send event")?;
             }
 
             // Channel reward is update
             Event::ChannelPointsCustomRewardUpdateV1(payload) => {
                 let _msg = map_message(payload.message)?;
-                _ = self.tx.send(AppEvent::RewardsChanged)
+                self.tx
+                    .send(AppEvent::RewardsChanged)
+                    .await
+                    .context("failed to send event")?;
             }
 
             // Channel is raided
             Event::ChannelRaidV1(payload) => {
                 let msg = map_message(payload.message)?;
-                _ = self.tx.send(AppEvent::Raid(TwitchEventRaid {
-                    user_id: msg.from_broadcaster_user_id,
-                    user_name: msg.from_broadcaster_user_login,
-                    user_display_name: msg.from_broadcaster_user_name,
-                    viewers: msg.viewers,
-                }))
+                self.tx
+                    .send(AppEvent::Raid(TwitchEventRaid {
+                        user_id: msg.from_broadcaster_user_id,
+                        user_name: msg.from_broadcaster_user_login,
+                        user_display_name: msg.from_broadcaster_user_name,
+                        viewers: msg.viewers,
+                    }))
+                    .await
+                    .context("failed to send event")?;
             }
 
             // Ad break started
             Event::ChannelAdBreakBeginV1(payload) => {
                 let msg = map_message(payload.message)?;
-                _ = self
-                    .tx
+                self.tx
                     .send(AppEvent::AdBreakBegin(TwitchEventAdBreakBegin {
                         duration_seconds: msg.duration_seconds,
                     }))
+                    .await
+                    .context("failed to send event")?;
             }
 
             // Shoutout received
             Event::ChannelShoutoutReceiveV1(payload) => {
                 let msg = map_message(payload.message)?;
-                _ = self
-                    .tx
+                self.tx
                     .send(AppEvent::ShoutoutReceive(TwitchEventShoutoutReceive {
                         user_id: msg.from_broadcaster_user_id,
                         user_name: msg.from_broadcaster_user_login,
                         user_display_name: msg.from_broadcaster_user_name,
                         viewer_count: msg.viewer_count,
                     }))
+                    .await
+                    .context("failed to send event")?;
             }
 
             _ => {}
