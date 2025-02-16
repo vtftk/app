@@ -42,16 +42,10 @@ body {
 }
 
 /* Animated container, apply some animation changes */
-.t-anim,
+.t-img,
 .t-pivot {
-  -webkit-animation-timing-function: linear !important;
   animation-timing-function: linear !important;
-  -webkit-animation-fill-mode: both !important;
   animation-fill-mode: both !important;
-}
-
-.thrown {
-  position: absolute;
 }
 
 * {

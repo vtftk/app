@@ -270,7 +270,7 @@ function createThrownImage(
   const elm = image.cloneNode(true) as HTMLImageElement;
   const style = elm.style;
 
-  elm.classList.add("t-anim");
+  elm.classList.add("t-img");
 
   style.width = `${scaledWidth}px`;
   style.height = `${scaledHeight}px`;
