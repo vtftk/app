@@ -51,28 +51,33 @@ pub async fn process_events(
 
     poll_fn::<(), _>(|cx| {
         // Poll new event execution
-        while let Poll::Ready(Some(event)) = event_rx.poll_recv(cx) {
+        while let Poll::Ready(result) = event_rx.poll_recv(cx) {
+            let event = match result {
+                Some(value) => value,
+
+                // All channels have been closed and the app is likely shutting down,
+                // finish the future and stop processing
+                None => return Poll::Ready(()),
+            };
+
             debug!("app event received: {:?}", event);
 
-            futures.push(async {
-                let result = process_event(
-                    &db,
-                    &twitch,
-                    &script_handle,
-                    &event_sender,
-                    &app_handle,
-                    event,
-                )
-                .await;
-
-                if let Err(err) = result {
-                    debug!("failed to process twitch event: {err:?}",);
-                }
-            });
+            futures.push(process_event(
+                &db,
+                &twitch,
+                &script_handle,
+                &event_sender,
+                &app_handle,
+                event,
+            ));
         }
 
         // Poll completions until no more ready
-        while let Poll::Ready(Some(_)) = futures.as_mut().poll_next(cx) {}
+        while let Poll::Ready(Some(result)) = futures.as_mut().poll_next(cx) {
+            if let Err(err) = result {
+                debug!("failed to process app event: {err:?}",);
+            }
+        }
 
         Poll::Pending
     })
