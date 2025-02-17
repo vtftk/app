@@ -2,8 +2,9 @@ use anyhow::Context;
 use chrono::{Days, Utc};
 
 use entity::{
-    app_data::AppDataModel, chat_history::ChatHistoryModel, commands::CommandModel,
-    event_execution::EventExecutionModel, event_log::EventLogsModel, events::EventModel,
+    app_data::AppDataModel, chat_history::ChatHistoryModel,
+    command_execution::CommandExecutionModel, command_log::CommandLogsModel,
+    event_execution::EventExecutionModel, event_log::EventLogsModel,
 };
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use std::{path::PathBuf, str::FromStr};
@@ -71,7 +72,7 @@ pub async fn clean_old_data(db: DbPool) -> anyhow::Result<()> {
             .context("system time is incorrect")?;
 
         EventLogsModel::delete_before(&db, clean_date).await?;
-        CommandModel::delete_logs_before(&db, clean_date).await?;
+        CommandLogsModel::delete_before(&db, clean_date).await?;
     }
 
     // Clean executions
@@ -81,7 +82,7 @@ pub async fn clean_old_data(db: DbPool) -> anyhow::Result<()> {
             .context("system time is incorrect")?;
 
         EventExecutionModel::delete_before(&db, clean_date).await?;
-        CommandModel::delete_executions_before(&db, clean_date).await?;
+        CommandExecutionModel::delete_before(&db, clean_date).await?;
     }
 
     // Clean chat history

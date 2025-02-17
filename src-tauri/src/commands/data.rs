@@ -4,10 +4,10 @@ use crate::{
         entity::{
             app_data::{AppData, AppDataModel},
             chat_history::ChatHistoryModel,
-            commands::CommandModel,
+            command_execution::CommandExecutionModel,
+            command_log::CommandLogsModel,
             event_execution::EventExecutionModel,
             event_log::EventLogsModel,
-            events::EventModel,
         },
         DbPool,
     },
@@ -84,7 +84,7 @@ pub async fn get_chat_history_estimate_size(db: tauri::State<'_, DbPool>) -> Cmd
 #[tauri::command]
 pub async fn get_executions_estimate_size(db: tauri::State<'_, DbPool>) -> CmdResult<u32> {
     let (command_size, event_size) = try_join!(
-        CommandModel::get_executions_estimate_size(db.inner()),
+        CommandExecutionModel::estimated_size(db.inner()),
         EventExecutionModel::estimated_size(db.inner())
     )?;
 
@@ -95,7 +95,7 @@ pub async fn get_executions_estimate_size(db: tauri::State<'_, DbPool>) -> CmdRe
 #[tauri::command]
 pub async fn get_logs_estimate_size(db: tauri::State<'_, DbPool>) -> CmdResult<u32> {
     let (command_size, event_size) = try_join!(
-        CommandModel::get_logs_estimate_size(db.inner()),
+        CommandLogsModel::estimated_size(db.inner()),
         EventLogsModel::estimated_size(db.inner())
     )?;
 

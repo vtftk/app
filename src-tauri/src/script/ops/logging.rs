@@ -10,7 +10,7 @@ use log::error;
 
 use crate::{
     database::entity::{
-        commands::{CommandModel, CreateCommandLog},
+        command_log::{CommandLogsModel, CreateCommandLog},
         event_log::{CreateEventLog, EventLogsModel},
         shared::LoggingLevelDb,
     },
@@ -72,7 +72,7 @@ pub fn op_log(
                     }
                 }
                 RuntimeExecutionContext::Command { command_id } => {
-                    if let Err(err) = CommandModel::create_log(
+                    if let Err(err) = CommandLogsModel::create(
                         &db,
                         CreateCommandLog {
                             command_id,

@@ -1,9 +1,10 @@
 use crate::{
     database::{
         entity::{
-            commands::{
-                CommandExecutionMetadata, CommandModel, CommandOutcome, CreateCommandExecution,
+            command_execution::{
+                CommandExecutionMetadata, CommandExecutionModel, CreateCommandExecution,
             },
+            commands::{CommandModel, CommandOutcome},
             event_execution::{CreateEventExecution, EventExecutionMetadata, EventExecutionModel},
             events::EventModel,
             shared::MinimumRequireRole,
@@ -210,8 +211,7 @@ pub async fn is_command_cooldown_elapsed(
 
     // Handle global cooldown (Check last execution)
     if !cooldown.per_user {
-        let last_execution = command
-            .last_execution(db, 0)
+        let last_execution = CommandExecutionModel::last(db, command.id, 0)
             .await
             .context("failed to request last execution for command")?;
 
@@ -226,8 +226,7 @@ pub async fn is_command_cooldown_elapsed(
     let mut offset = 0;
 
     loop {
-        let last_execution = command
-            .last_execution(db, offset)
+        let last_execution = CommandExecutionModel::last(db, command.id, offset)
             .await
             .context("failed to request last execution for command")?;
 
@@ -361,7 +360,7 @@ pub async fn execute_command(
     }
 
     // Store command execution
-    CommandModel::create_execution(
+    CommandExecutionModel::create(
         db,
         CreateCommandExecution {
             command_id: command.command.id,

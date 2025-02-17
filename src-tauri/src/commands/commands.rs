@@ -4,10 +4,10 @@
 
 use crate::database::{
     entity::{
-        commands::{
-            CommandExecutionModel, CommandLogsModel, CommandModel, CommandWithAliases,
-            CreateCommand, UpdateCommand,
-        },
+        command_alias::{CommandAliasModel, CommandWithAliases},
+        command_execution::CommandExecutionModel,
+        command_log::CommandLogsModel,
+        commands::{CommandModel, CreateCommand, UpdateCommand},
         shared::{ExecutionsQuery, LogsQuery, UpdateOrdering},
     },
     DbPool,
@@ -33,8 +33,13 @@ pub async fn get_command_by_id(
     db: State<'_, DbPool>,
 ) -> CmdResult<Option<CommandWithAliases>> {
     let db = db.inner();
-    let command = CommandModel::get_by_id_with_aliases(db, command_id).await?;
-    Ok(command)
+    let command = match CommandModel::get_by_id(db, command_id).await? {
+        Some(value) => value,
+        None => return Ok(None),
+    };
+    let aliases = CommandAliasModel::get_aliases(db, command.id).await?;
+
+    Ok(Some(CommandWithAliases { command, aliases }))
 }
 
 /// Create a new command
@@ -45,7 +50,7 @@ pub async fn create_command(
 ) -> CmdResult<CommandWithAliases> {
     let db = db.inner();
     let command = CommandModel::create(db, create).await?;
-    let aliases = command.get_aliases(db).await?;
+    let aliases = CommandAliasModel::get_aliases(db, command.id).await?;
 
     Ok(CommandWithAliases { command, aliases })
 }
@@ -64,7 +69,7 @@ pub async fn update_command(
 
     command.update(db, update).await?;
 
-    let aliases = command.get_aliases(db).await?;
+    let aliases = CommandAliasModel::get_aliases(db, command.id).await?;
     Ok(CommandWithAliases { command, aliases })
 }
 
@@ -87,10 +92,7 @@ pub async fn get_command_logs(
     db: State<'_, DbPool>,
 ) -> CmdResult<Vec<CommandLogsModel>> {
     let db = db.inner();
-    let command = CommandModel::get_by_id(db, command_id)
-        .await?
-        .context("command not found")?;
-    let logs = command.get_logs(db, query).await?;
+    let logs = CommandLogsModel::query(db, command_id, query).await?;
 
     Ok(logs)
 }
@@ -99,7 +101,7 @@ pub async fn get_command_logs(
 pub async fn delete_command_logs(log_ids: Vec<Uuid>, db: State<'_, DbPool>) -> CmdResult<()> {
     let db = db.inner();
 
-    CommandModel::delete_many_logs(db, &log_ids).await?;
+    CommandLogsModel::delete_by_ids(db, &log_ids).await?;
 
     Ok(())
 }
@@ -122,10 +124,7 @@ pub async fn get_command_executions(
     db: State<'_, DbPool>,
 ) -> CmdResult<Vec<CommandExecutionModel>> {
     let db = db.inner();
-    let command = CommandModel::get_by_id(db, command_id)
-        .await?
-        .context("command not found")?;
-    let executions = command.get_executions(db, query).await?;
+    let executions = CommandExecutionModel::query(db, command_id, query).await?;
 
     Ok(executions)
 }
@@ -137,7 +136,7 @@ pub async fn delete_command_executions(
 ) -> CmdResult<()> {
     let db = db.inner();
 
-    CommandModel::delete_many_executions(db, &execution_ids).await?;
+    CommandExecutionModel::delete_by_ids(db, &execution_ids).await?;
 
     Ok(())
 }
