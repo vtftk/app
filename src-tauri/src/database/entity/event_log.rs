@@ -92,19 +92,22 @@ impl EventLogsModel {
                 EventLogsColumn::CreatedAt,
             ])
             .and_where(Expr::col(EventLogsColumn::EventId).eq(event_id))
+            .and_where_option(
+                query
+                    .level
+                    .map(|level| Expr::col(EventLogsColumn::Level).eq(level as i32)),
+            )
+            .and_where_option(
+                query
+                    .start_date
+                    .map(|start_date| Expr::col(EventLogsColumn::CreatedAt).gt(start_date)),
+            )
+            .and_where_option(
+                query
+                    .end_date
+                    .map(|end_date| Expr::col(EventLogsColumn::CreatedAt).lt(end_date)),
+            )
             .order_by(EventLogsColumn::CreatedAt, Order::Desc);
-
-        if let Some(level) = query.level {
-            select.and_where(Expr::col(EventLogsColumn::Level).eq(level as i32));
-        }
-
-        if let Some(start_date) = query.start_date {
-            select.and_where(Expr::col(EventLogsColumn::CreatedAt).gt(start_date));
-        }
-
-        if let Some(end_date) = query.end_date {
-            select.and_where(Expr::col(EventLogsColumn::CreatedAt).lt(end_date));
-        }
 
         if let Some(offset) = query.offset {
             select.offset(offset);

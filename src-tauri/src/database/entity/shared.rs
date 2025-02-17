@@ -3,19 +3,7 @@ use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString};
 use uuid::Uuid;
 
-#[derive(
-    Debug,
-    Default,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    EnumString,
-    Display,
-    sqlx::Type,
-)]
+#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, EnumString, Display, sqlx::Type)]
 pub enum MinimumRequireRole {
     #[default]
     None,

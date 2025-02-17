@@ -10,7 +10,7 @@ use crate::database::{
 
 use super::commands::CommandModel;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, FromRow)]
+#[derive(Clone, Debug, Serialize, Deserialize, FromRow)]
 pub struct CommandAliasModel {
     /// Unique ID of the log
     pub id: Uuid,

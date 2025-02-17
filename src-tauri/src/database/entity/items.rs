@@ -1,13 +1,13 @@
 use chrono::{DateTime, Utc};
-use sea_query::{
-    CaseStatement, Expr, Func, IdenStatic, OnConflict, Order, Query, SqliteQueryBuilder,
-};
-use sea_query_binder::SqlxBinder;
+use sea_query::{CaseStatement, Expr, Func, IdenStatic, OnConflict, Order, Query};
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use uuid::Uuid;
 
-use crate::database::{DbPool, DbResult};
+use crate::database::{
+    helpers::{sql_exec, sql_query_all, sql_query_maybe_one},
+    DbPool, DbResult,
+};
 
 use super::{shared::UpdateOrdering, sounds::SoundType};
 
@@ -106,19 +106,26 @@ impl ItemModel {
 
         let config_value = serde_json::to_value(&model.config)?;
 
-        let (sql, values) = Query::insert()
-            .into_table(ItemsTable)
-            .columns(ItemModel::columns())
-            .values_panic([
-                model.id.into(),
-                model.name.clone().into(),
-                config_value.into(),
-                model.order.into(),
-                model.created_at.into(),
-            ])
-            .build_sqlx(SqliteQueryBuilder);
-
-        sqlx::query_with(&sql, values).execute(db).await?;
+        sql_exec(
+            db,
+            Query::insert()
+                .into_table(ItemsTable)
+                .columns([
+                    ItemsColumn::Id,
+                    ItemsColumn::Name,
+                    ItemsColumn::Config,
+                    ItemsColumn::Order,
+                    ItemsColumn::CreatedAt,
+                ])
+                .values_panic([
+                    model.id.into(),
+                    model.name.clone().into(),
+                    config_value.into(),
+                    model.order.into(),
+                    model.created_at.into(),
+                ]),
+        )
+        .await?;
 
         model
             .append_sounds(db, &create.impact_sounds, SoundType::Impact)
@@ -130,27 +137,29 @@ impl ItemModel {
         Ok(model)
     }
 
-    pub async fn all(db: &DbPool) -> anyhow::Result<Vec<ItemModel>> {
-        let (sql, values) = Query::select()
-            .columns(ItemModel::columns())
-            .from(ItemsTable)
-            .order_by_columns([
-                (ItemsColumn::Order, Order::Asc),
-                (ItemsColumn::CreatedAt, Order::Desc),
-            ])
-            .build_sqlx(SqliteQueryBuilder);
-        let result = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
-        Ok(result)
+    pub async fn all(db: &DbPool) -> DbResult<Vec<ItemModel>> {
+        sql_query_all(
+            db,
+            Query::select()
+                .columns(ItemModel::columns())
+                .from(ItemsTable)
+                .order_by_columns([
+                    (ItemsColumn::Order, Order::Asc),
+                    (ItemsColumn::CreatedAt, Order::Desc),
+                ]),
+        )
+        .await
     }
 
-    pub async fn get_by_id(db: &DbPool, id: Uuid) -> anyhow::Result<Option<ItemModel>> {
-        let (sql, values) = Query::select()
-            .columns(ItemModel::columns())
-            .from(ItemsTable)
-            .and_where(Expr::col(ItemsColumn::Id).eq(id))
-            .build_sqlx(SqliteQueryBuilder);
-        let result = sqlx::query_as_with(&sql, values).fetch_optional(db).await?;
-        Ok(result)
+    pub async fn get_by_id(db: &DbPool, id: Uuid) -> DbResult<Option<ItemModel>> {
+        sql_query_maybe_one(
+            db,
+            Query::select()
+                .columns(ItemModel::columns())
+                .from(ItemsTable)
+                .and_where(Expr::col(ItemsColumn::Id).eq(id)),
+        )
+        .await
     }
 
     pub async fn with_items_sounds(
@@ -175,17 +184,18 @@ impl ItemModel {
             .collect();
 
         // Lookup the new sounds
-        let (sql, values) = Query::select()
-            .columns([
-                ItemsSoundsColumn::ItemId,
-                ItemsSoundsColumn::SoundId,
-                ItemsSoundsColumn::SoundType,
-            ])
-            .from(ItemsSoundsTable)
-            .and_where(Expr::col(ItemsSoundsColumn::ItemId).is_in(item_ids))
-            .build_sqlx(SqliteQueryBuilder);
-        let rows: Vec<(Uuid, Uuid, SoundType)> =
-            sqlx::query_as_with(&sql, values).fetch_all(db).await?;
+        let rows: Vec<(Uuid, Uuid, SoundType)> = sql_query_all(
+            db,
+            Query::select()
+                .columns([
+                    ItemsSoundsColumn::ItemId,
+                    ItemsSoundsColumn::SoundId,
+                    ItemsSoundsColumn::SoundType,
+                ])
+                .from(ItemsSoundsTable)
+                .and_where(Expr::col(ItemsSoundsColumn::ItemId).is_in(item_ids)),
+        )
+        .await?;
 
         // Connect the items and sounds
         for (item_id, sound_id, sound_type) in rows {
@@ -212,14 +222,14 @@ impl ItemModel {
         ids: &[Uuid],
     ) -> DbResult<Vec<ItemWithSounds>> {
         // Request the items
-        let items: Vec<ItemModel> = {
-            let (sql, values) = Query::select()
+        let items: Vec<ItemModel> = sql_query_all(
+            db,
+            Query::select()
                 .columns(ItemModel::columns())
                 .from(ItemsTable)
-                .and_where(Expr::col(ItemsColumn::Id).is_in(ids.iter().copied()))
-                .build_sqlx(SqliteQueryBuilder);
-            sqlx::query_as_with(&sql, values).fetch_all(db).await?
-        };
+                .and_where(Expr::col(ItemsColumn::Id).is_in(ids.iter().copied())),
+        )
+        .await?;
 
         Self::with_items_sounds(db, items).await
     }
@@ -246,9 +256,7 @@ impl ItemModel {
                 select.and_where(Expr::col(ItemsColumn::Name).is_in(names));
             };
 
-            let (sql, values) = select.build_sqlx(SqliteQueryBuilder);
-
-            sqlx::query_as_with(&sql, values).fetch_all(db).await?
+            sql_query_all(db, &select).await?
         };
 
         Self::with_items_sounds(db, items).await
@@ -275,9 +283,7 @@ impl ItemModel {
             update.value(ItemsColumn::Order, Expr::value(order));
         }
 
-        let (sql, values) = update.build_sqlx(SqliteQueryBuilder);
-
-        sqlx::query_with(&sql, values).execute(db).await?;
+        sql_exec(db, &update).await?;
 
         if let Some(impact_sounds) = data.impact_sounds {
             self.set_sounds(db, &impact_sounds, SoundType::Impact)
@@ -306,12 +312,13 @@ impl ItemModel {
                 );
             }
 
-            let (sql, values) = Query::update()
-                .table(ItemsTable)
-                .value(ItemsColumn::Order, case)
-                .build_sqlx(SqliteQueryBuilder);
-
-            sqlx::query_with(&sql, values).execute(db).await?;
+            sql_exec(
+                db,
+                Query::update()
+                    .table(ItemsTable)
+                    .value(ItemsColumn::Order, case),
+            )
+            .await?;
         }
 
         Ok(())
@@ -325,17 +332,17 @@ impl ItemModel {
         sound_type: SoundType,
     ) -> DbResult<()> {
         // Delete any impact sounds not in the provided list
-        let (sql, values) = Query::delete()
-            .from_table(ItemsSoundsTable)
-            .and_where(
-                Expr::col(ItemsSoundsColumn::ItemId)
-                    .eq(self.id)
-                    .and(Expr::col(ItemsSoundsColumn::SoundId).is_not_in(sound_ids.iter().copied()))
-                    .and(Expr::col(ItemsSoundsColumn::SoundType).eq(sound_type.to_string())),
-            )
-            .build_sqlx(SqliteQueryBuilder);
-
-        sqlx::query_with(&sql, values).execute(db).await?;
+        sql_exec(
+            db,
+            Query::delete()
+                .from_table(ItemsSoundsTable)
+                .and_where(Expr::col(ItemsSoundsColumn::ItemId).eq(self.id))
+                .and_where(
+                    Expr::col(ItemsSoundsColumn::SoundId).is_not_in(sound_ids.iter().copied()),
+                )
+                .and_where(Expr::col(ItemsSoundsColumn::SoundType).eq(sound_type.to_string())),
+        )
+        .await?;
 
         self.append_sounds(db, sound_ids, sound_type).await?;
 
@@ -349,35 +356,33 @@ impl ItemModel {
         sound_ids: &[Uuid],
         sound_type: SoundType,
     ) -> DbResult<()> {
-        // Insert the new connections
-        let (sql, values) = Query::insert()
-            .columns([
-                ItemsSoundsColumn::ItemId,
-                ItemsSoundsColumn::SoundId,
-                ItemsSoundsColumn::SoundType,
-            ])
-            .values_from_panic(sound_ids.iter().map(|sound_id| {
-                [
-                    self.id.into(),
-                    (*sound_id).into(),
-                    sound_type.to_string().into(),
-                ]
-            }))
-            .on_conflict(
-                OnConflict::columns([
+        sql_exec(
+            db,
+            Query::insert()
+                .columns([
                     ItemsSoundsColumn::ItemId,
                     ItemsSoundsColumn::SoundId,
                     ItemsSoundsColumn::SoundType,
                 ])
-                .do_nothing()
-                .to_owned(),
-            )
-            .into_table(ItemsSoundsTable)
-            .build_sqlx(SqliteQueryBuilder);
-
-        sqlx::query_with(&sql, values).execute(db).await?;
-
-        Ok(())
+                .values_from_panic(sound_ids.iter().map(|sound_id| {
+                    [
+                        self.id.into(),
+                        (*sound_id).into(),
+                        sound_type.to_string().into(),
+                    ]
+                }))
+                .on_conflict(
+                    OnConflict::columns([
+                        ItemsSoundsColumn::ItemId,
+                        ItemsSoundsColumn::SoundId,
+                        ItemsSoundsColumn::SoundType,
+                    ])
+                    .do_nothing()
+                    .to_owned(),
+                )
+                .into_table(ItemsSoundsTable),
+        )
+        .await
     }
 
     pub async fn with_sounds(self, db: &DbPool) -> DbResult<ItemWithSounds> {
@@ -388,13 +393,15 @@ impl ItemModel {
             windup_sounds_ids: Default::default(),
         };
 
-        // Lookup the new sounds
-        let (sql, values) = Query::select()
-            .columns([ItemsSoundsColumn::SoundId, ItemsSoundsColumn::SoundType])
-            .from(ItemsSoundsTable)
-            .and_where(Expr::col(ItemsSoundsColumn::ItemId).eq(item_with_sounds.item.id))
-            .build_sqlx(SqliteQueryBuilder);
-        let rows: Vec<(Uuid, SoundType)> = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
+        // Lookup the sounds
+        let rows: Vec<(Uuid, SoundType)> = sql_query_all(
+            db,
+            Query::select()
+                .columns([ItemsSoundsColumn::SoundId, ItemsSoundsColumn::SoundType])
+                .from(ItemsSoundsTable)
+                .and_where(Expr::col(ItemsSoundsColumn::ItemId).eq(item_with_sounds.item.id)),
+        )
+        .await?;
 
         // Connect the items and sounds
         for (sound_id, sound_type) in rows {
@@ -408,12 +415,13 @@ impl ItemModel {
     }
 
     pub async fn delete(self, db: &DbPool) -> DbResult<()> {
-        let (sql, values) = Query::delete()
-            .from_table(ItemsTable)
-            .and_where(Expr::col(ItemsColumn::Id).eq(self.id))
-            .build_sqlx(SqliteQueryBuilder);
-        sqlx::query_with(&sql, values).execute(db).await?;
-        Ok(())
+        sql_exec(
+            db,
+            Query::delete()
+                .from_table(ItemsTable)
+                .and_where(Expr::col(ItemsColumn::Id).eq(self.id)),
+        )
+        .await
     }
 }
 

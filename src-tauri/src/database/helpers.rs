@@ -47,21 +47,6 @@ where
 }
 
 /// Executes the provided SQL query getting the results as a single
-/// object typed as <O> will return an error if no rows were found
-pub async fn sql_query_one<'e, E, Q, O>(executor: E, query: &Q) -> DbResult<O>
-where
-    Q: SqlxBinder,
-    E: sqlx::Executor<'e, Database = Sqlite>,
-    O: for<'r> FromRow<'r, SqliteRow> + Send + Unpin,
-{
-    let (sql, values) = query.build_sqlx(SqliteQueryBuilder);
-    let result = sqlx::query_as_with(&sql, values)
-        .fetch_one(executor)
-        .await?;
-
-    Ok(result)
-}
-/// Executes the provided SQL query getting the results as a single
 /// object typed as a tuple starting with (O,) will return an error
 /// if no rows were found
 ///

@@ -15,7 +15,7 @@ use crate::{
 
 use super::shared::ExecutionsQuery;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct CommandExecutionModel {
     /// Unique ID for the event
     pub id: Uuid,
@@ -26,7 +26,7 @@ pub struct CommandExecutionModel {
 }
 
 #[serde_as]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommandExecutionMetadata {
     /// User who triggered the event
     pub user: Option<TwitchEventUser>,
@@ -125,15 +125,17 @@ impl CommandExecutionModel {
                 CommandExecutionsColumn::CreatedAt,
             ])
             .and_where(Expr::col(CommandExecutionsColumn::CommandId).eq(command_id))
+            .and_where_option(
+                query
+                    .start_date
+                    .map(|start_date| Expr::col(CommandExecutionsColumn::CreatedAt).gt(start_date)),
+            )
+            .and_where_option(
+                query
+                    .end_date
+                    .map(|end_date| Expr::col(CommandExecutionsColumn::CreatedAt).lt(end_date)),
+            )
             .order_by(CommandExecutionsColumn::CreatedAt, Order::Desc);
-
-        if let Some(start_date) = query.start_date {
-            select.and_where(Expr::col(CommandExecutionsColumn::CreatedAt).gt(start_date));
-        }
-
-        if let Some(end_date) = query.end_date {
-            select.and_where(Expr::col(CommandExecutionsColumn::CreatedAt).lt(end_date));
-        }
 
         if let Some(offset) = query.offset {
             select.offset(offset);

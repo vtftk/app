@@ -1,14 +1,16 @@
 use chrono::{DateTime, Utc};
-use sea_query::{Alias, Asterisk, Expr, Func, IdenStatic, Query, SqliteQueryBuilder};
-use sea_query_binder::SqlxBinder;
+use sea_query::{Asterisk, Expr, Func, IdenStatic, Query};
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use twitch_api::types::UserId;
 use uuid::Uuid;
 
-use crate::database::{DbPool, DbResult};
+use crate::database::{
+    helpers::{sql_exec, sql_query_one_single},
+    DbPool, DbResult,
+};
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, FromRow)]
+#[derive(Clone, Debug, Serialize, Deserialize, FromRow)]
 pub struct ChatHistoryModel {
     /// Unique ID of the log
     pub id: Uuid,
@@ -37,89 +39,74 @@ pub struct CreateChatHistory {
 }
 
 impl ChatHistoryModel {
-    /// Create a new script
+    /// Create a new chat history item
     pub async fn create(db: &DbPool, create: CreateChatHistory) -> DbResult<()> {
-        let (sql, values) = Query::insert()
-            .into_table(ChatHistoryTable)
-            .columns(ChatHistoryModel::columns())
-            .values_panic([
-                create.id.into(),
-                create.user_id.into(),
-                create.message.into(),
-                create.cheer.into(),
-                create.created_at.into(),
-            ])
-            .build_sqlx(SqliteQueryBuilder);
-
-        sqlx::query_with(&sql, values).execute(db).await?;
-
-        Ok(())
+        sql_exec(
+            db,
+            Query::insert()
+                .into_table(ChatHistoryTable)
+                .columns([
+                    ChatHistoryColumn::Id,
+                    ChatHistoryColumn::UserId,
+                    ChatHistoryColumn::Message,
+                    ChatHistoryColumn::Cheer,
+                    ChatHistoryColumn::CreatedAt,
+                ])
+                .values_panic([
+                    create.id.into(),
+                    create.user_id.into(),
+                    create.message.into(),
+                    create.cheer.into(),
+                    create.created_at.into(),
+                ]),
+        )
+        .await
     }
 
     /// Estimates the size in bytes that the current chat history is taking up
     pub async fn estimate_size(db: &DbPool) -> DbResult<u32> {
-        #[derive(Default, FromRow)]
-        struct PartialModel {
-            total_message_length: Option<u32>,
-        }
-
-        let (sql, values) = Query::select()
-            .from(ChatHistoryTable)
-            .expr_as(
-                Func::sum(Func::char_length(Expr::col(ChatHistoryColumn::Message))),
-                Alias::new("total_message_length"),
-            )
-            .build_sqlx(SqliteQueryBuilder);
-
-        let result: PartialModel = sqlx::query_as_with(&sql, values).fetch_one(db).await?;
-        Ok(result.total_message_length.unwrap_or_default())
+        sql_query_one_single(
+            db,
+            Query::select().from(ChatHistoryTable).expr(Func::coalesce([
+                // Get total length of all metadata text
+                Func::sum(Func::char_length(Expr::col(ChatHistoryColumn::Message))).into(),
+                // Fallback to zero
+                Expr::value(0),
+            ])),
+        )
+        .await
     }
 
+    /// Get the number of chat history messages since `start_date` excluding those
+    /// where the user id matches `exclude_id` (When provided)
     pub async fn count_since(
         db: &DbPool,
         start_date: DateTime<Utc>,
         exclude_id: Option<UserId>,
     ) -> DbResult<u32> {
-        let mut select = Query::select();
-
-        #[derive(FromRow)]
-        struct Count {
-            count: u32,
-        }
-
-        select
-            .from(ChatHistoryTable)
-            .columns(ChatHistoryModel::columns())
-            .and_where(Expr::col(ChatHistoryColumn::CreatedAt).gt(Expr::value(start_date)))
-            .expr_as(Func::count(Expr::col(Asterisk)), Alias::new("count"));
-
-        if let Some(exclude_id) = exclude_id {
-            select.and_where(Expr::col(ChatHistoryColumn::UserId).ne(exclude_id.as_str()));
-        }
-
-        let (sql, values) = select.build_sqlx(SqliteQueryBuilder);
-        let result: Count = sqlx::query_as_with(&sql, values).fetch_one(db).await?;
-
-        Ok(result.count)
+        sql_query_one_single(
+            db,
+            Query::select()
+                .from(ChatHistoryTable)
+                .expr(Func::count(Expr::col(Asterisk)))
+                .and_where(Expr::col(ChatHistoryColumn::CreatedAt).gt(Expr::value(start_date)))
+                .and_where_option(exclude_id.map(|exclude_id| {
+                    Expr::col(ChatHistoryColumn::UserId).ne(exclude_id.as_str())
+                })),
+        )
+        .await
     }
 
+    /// Deletes all chat history that happened before the provided `start_time`.
+    /// Used to clean out old chat history
     pub async fn delete_before(db: &DbPool, start_date: DateTime<Utc>) -> DbResult<()> {
-        let (sql, values) = Query::delete()
-            .from_table(ChatHistoryTable)
-            .and_where(Expr::col(ChatHistoryColumn::CreatedAt).lt(start_date))
-            .build_sqlx(SqliteQueryBuilder);
-        sqlx::query_with(&sql, values).execute(db).await?;
-        Ok(())
-    }
-
-    pub fn columns() -> [ChatHistoryColumn; 5] {
-        [
-            ChatHistoryColumn::Id,
-            ChatHistoryColumn::UserId,
-            ChatHistoryColumn::Message,
-            ChatHistoryColumn::Cheer,
-            ChatHistoryColumn::CreatedAt,
-        ]
+        sql_exec(
+            db,
+            Query::delete()
+                .from_table(ChatHistoryTable)
+                .and_where(Expr::col(ChatHistoryColumn::CreatedAt).lt(start_date)),
+        )
+        .await
     }
 }
 

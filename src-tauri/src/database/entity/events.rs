@@ -1,14 +1,35 @@
 use chrono::{DateTime, Utc};
-use sea_query::{CaseStatement, Expr, IdenStatic, Order, Query, SqliteQueryBuilder};
-use sea_query_binder::SqlxBinder;
+use sea_query::{CaseStatement, Expr, IdenStatic, Order, Query};
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use strum::{Display, EnumString};
 use uuid::Uuid;
 
-use crate::database::{DbPool, DbResult};
+use crate::database::{
+    helpers::{sql_exec, sql_query_all, sql_query_maybe_one},
+    DbPool, DbResult,
+};
 
 use super::shared::{MinMax, MinimumRequireRole, UpdateOrdering};
+
+#[derive(IdenStatic, Copy, Clone)]
+#[iden(rename = "events")]
+pub struct EventsTable;
+
+#[derive(IdenStatic, Copy, Clone)]
+pub enum EventsColumn {
+    Id,
+    Enabled,
+    Name,
+    TriggerType,
+    Trigger,
+    Outcome,
+    Cooldown,
+    RequireRole,
+    OutcomeDelay,
+    Order,
+    CreatedAt,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct EventModel {
@@ -42,7 +63,7 @@ pub struct EventModel {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct EventCooldown {
     pub enabled: bool,
@@ -62,9 +83,7 @@ impl Default for EventCooldown {
 
 /// Copy of the [EventTrigger] enum but string variants to
 /// support storing in the database as strings for querying
-#[derive(
-    Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, EnumString, Display,
-)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, sqlx::Type, EnumString, Display)]
 pub enum EventTriggerType {
     #[default]
     Redeem,
@@ -96,7 +115,7 @@ impl EventTriggerType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum EventTrigger {
     /// Redeem was triggered
@@ -147,7 +166,7 @@ pub enum EventTrigger {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ThrowableAmountData {
     /// Throw items (All at once)
@@ -181,7 +200,7 @@ pub enum ThrowableAmountData {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InputAmountConfig {
     /// Multiplier to apply against the input amount
     pub multiplier: f64,
@@ -198,7 +217,7 @@ impl Default for InputAmountConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventOutcomeBits {
     /// Throwable to throw for 1 bit (Override, defaults to builtin)
     pub _1: Option<Uuid>,
@@ -214,7 +233,7 @@ pub struct EventOutcomeBits {
     pub amount: ThrowableAmountData,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventOutcomeThrowable {
     /// IDs of the throwables to throw
     pub throwable_ids: Vec<Uuid>,
@@ -223,33 +242,33 @@ pub struct EventOutcomeThrowable {
     pub amount: ThrowableAmountData,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventOutcomeTriggerHotkey {
     pub hotkey_id: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventOutcomePlaySound {
     pub sound_id: Uuid,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventOutcomeSendChat {
     pub template: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventOutcomeScript {
     pub script: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventOutcomeChannelEmotes {
     /// How many emotes to throw
     pub amount: ThrowableAmountData,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum EventOutcome {
     /// Throw bits (Only compatible with bits trigger)
@@ -328,37 +347,51 @@ impl EventModel {
         let trigger_value = serde_json::to_value(&model.trigger)?;
         let outcome_value = serde_json::to_value(&model.outcome)?;
 
-        let (sql, values) = Query::insert()
-            .into_table(EventsTable)
-            .columns(EventModel::columns())
-            .values_panic([
-                model.id.into(),
-                model.enabled.into(),
-                model.name.clone().into(),
-                model.trigger_type.to_string().into(),
-                trigger_value.into(),
-                outcome_value.into(),
-                model.require_role.to_string().into(),
-                model.outcome_delay.into(),
-                model.order.into(),
-                model.created_at.into(),
-            ])
-            .build_sqlx(SqliteQueryBuilder);
-
-        sqlx::query_with(&sql, values).execute(db).await?;
+        sql_exec(
+            db,
+            Query::insert()
+                .into_table(EventsTable)
+                .columns([
+                    EventsColumn::Id,
+                    EventsColumn::Enabled,
+                    EventsColumn::Name,
+                    EventsColumn::TriggerType,
+                    EventsColumn::Trigger,
+                    EventsColumn::Outcome,
+                    EventsColumn::Cooldown,
+                    EventsColumn::RequireRole,
+                    EventsColumn::OutcomeDelay,
+                    EventsColumn::Order,
+                    EventsColumn::CreatedAt,
+                ])
+                .values_panic([
+                    model.id.into(),
+                    model.enabled.into(),
+                    model.name.clone().into(),
+                    model.trigger_type.to_string().into(),
+                    trigger_value.into(),
+                    outcome_value.into(),
+                    model.require_role.to_string().into(),
+                    model.outcome_delay.into(),
+                    model.order.into(),
+                    model.created_at.into(),
+                ]),
+        )
+        .await?;
 
         Ok(model)
     }
 
     /// Find a specific event by ID
     pub async fn get_by_id(db: &DbPool, id: Uuid) -> DbResult<Option<EventModel>> {
-        let (sql, values) = Query::select()
-            .columns(EventModel::columns())
-            .from(EventsTable)
-            .and_where(Expr::col(EventsColumn::Id).eq(id))
-            .build_sqlx(SqliteQueryBuilder);
-        let result = sqlx::query_as_with(&sql, values).fetch_optional(db).await?;
-        Ok(result)
+        sql_query_maybe_one(
+            db,
+            Query::select()
+                .columns(EventModel::columns())
+                .from(EventsTable)
+                .and_where(Expr::col(EventsColumn::Id).eq(id)),
+        )
+        .await
     }
 
     /// Find a specific event by a specific trigger type
@@ -367,33 +400,35 @@ impl EventModel {
     pub async fn get_by_trigger_type(
         db: &DbPool,
         trigger_type: EventTriggerType,
-    ) -> DbResult<Vec<Self>> {
-        let (sql, values) = Query::select()
-            .columns(EventModel::columns())
-            .from(EventsTable)
-            .and_where(Expr::col(EventsColumn::TriggerType).eq(trigger_type.to_string()))
-            .and_where(Expr::col(EventsColumn::Enabled).eq(true))
-            .order_by_columns([
-                (EventsColumn::Order, Order::Asc),
-                (EventsColumn::CreatedAt, Order::Desc),
-            ])
-            .build_sqlx(SqliteQueryBuilder);
-        let result = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
-        Ok(result)
+    ) -> DbResult<Vec<EventModel>> {
+        sql_query_all(
+            db,
+            Query::select()
+                .columns(EventModel::columns())
+                .from(EventsTable)
+                .and_where(Expr::col(EventsColumn::TriggerType).eq(trigger_type.to_string()))
+                .and_where(Expr::col(EventsColumn::Enabled).eq(true))
+                .order_by_columns([
+                    (EventsColumn::Order, Order::Asc),
+                    (EventsColumn::CreatedAt, Order::Desc),
+                ]),
+        )
+        .await
     }
 
     /// Find all events
-    pub async fn all(db: &DbPool) -> DbResult<Vec<Self>> {
-        let (sql, values) = Query::select()
-            .columns(EventModel::columns())
-            .from(EventsTable)
-            .order_by_columns([
-                (EventsColumn::Order, Order::Asc),
-                (EventsColumn::CreatedAt, Order::Desc),
-            ])
-            .build_sqlx(SqliteQueryBuilder);
-        let result = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
-        Ok(result)
+    pub async fn all(db: &DbPool) -> DbResult<Vec<EventModel>> {
+        sql_query_all(
+            db,
+            Query::select()
+                .columns(EventModel::columns())
+                .from(EventsTable)
+                .order_by_columns([
+                    (EventsColumn::Order, Order::Asc),
+                    (EventsColumn::CreatedAt, Order::Desc),
+                ]),
+        )
+        .await
     }
 
     /// Update the current event
@@ -451,8 +486,7 @@ impl EventModel {
             update.value(EventsColumn::Order, Expr::value(order));
         }
 
-        let (sql, values) = update.build_sqlx(SqliteQueryBuilder);
-        sqlx::query_with(&sql, values).execute(db).await?;
+        sql_exec(db, &update).await?;
 
         Ok(())
     }
@@ -471,42 +505,25 @@ impl EventModel {
                 );
             }
 
-            let (sql, values) = Query::update()
-                .table(EventsTable)
-                .value(EventsColumn::Order, case)
-                .build_sqlx(SqliteQueryBuilder);
-
-            sqlx::query_with(&sql, values).execute(db).await?;
+            sql_exec(
+                db,
+                Query::update()
+                    .table(EventsTable)
+                    .value(EventsColumn::Order, case),
+            )
+            .await?;
         }
 
         Ok(())
     }
 
     pub async fn delete(self, db: &DbPool) -> DbResult<()> {
-        let (sql, values) = Query::delete()
-            .from_table(EventsTable)
-            .and_where(Expr::col(EventsColumn::Id).eq(self.id))
-            .build_sqlx(SqliteQueryBuilder);
-        sqlx::query_with(&sql, values).execute(db).await?;
-        Ok(())
+        sql_exec(
+            db,
+            Query::delete()
+                .from_table(EventsTable)
+                .and_where(Expr::col(EventsColumn::Id).eq(self.id)),
+        )
+        .await
     }
-}
-
-#[derive(IdenStatic, Copy, Clone)]
-#[iden(rename = "events")]
-pub struct EventsTable;
-
-#[derive(IdenStatic, Copy, Clone)]
-pub enum EventsColumn {
-    Id,
-    Enabled,
-    Name,
-    TriggerType,
-    Trigger,
-    Outcome,
-    Cooldown,
-    RequireRole,
-    OutcomeDelay,
-    Order,
-    CreatedAt,
 }

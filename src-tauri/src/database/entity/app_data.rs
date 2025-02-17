@@ -1,19 +1,33 @@
 use chrono::{DateTime, Utc};
-use sea_query::{Alias, Expr, IdenStatic, OnConflict, Query, SqliteQueryBuilder};
-use sea_query_binder::SqlxBinder;
+use sea_query::{Alias, Expr, Func, IdenStatic, OnConflict, Query};
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use twitch_api::{helix::Scope, twitch_oauth2::AccessToken};
 
-use crate::database::DbPool;
+use crate::database::{
+    helpers::{sql_exec, sql_query_maybe_one},
+    DbPool,
+};
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, FromRow)]
+#[derive(Clone, Debug, Serialize, Deserialize, FromRow)]
 pub struct AppDataModel {
     pub id: i32,
     #[sqlx(json)]
     pub data: AppData,
     pub created_at: DateTime<Utc>,
     pub last_modified_at: DateTime<Utc>,
+}
+
+#[derive(IdenStatic, Copy, Clone)]
+#[iden(rename = "app_data")]
+pub struct AppDataTable;
+
+#[derive(IdenStatic, Copy, Clone)]
+pub enum AppDataColumn {
+    Id,
+    Data,
+    CreatedAt,
+    LastModifiedAt,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -253,47 +267,48 @@ impl AppDataModel {
 
         let data_value = serde_json::to_value(&model.data)?;
 
-        let (sql, values) = Query::insert()
-            .into_table(AppDataTable)
-            .columns([
-                AppDataColumn::Id,
-                AppDataColumn::Data,
-                AppDataColumn::CreatedAt,
-                AppDataColumn::LastModifiedAt,
-            ])
-            .values_panic([
-                model.id.into(),
-                data_value.into(),
-                model.created_at.into(),
-                model.last_modified_at.into(),
-            ])
-            .on_conflict(
-                OnConflict::new()
-                    .update_column(AppDataColumn::Data)
-                    .update_column(AppDataColumn::LastModifiedAt)
-                    .to_owned(),
-            )
-            .build_sqlx(SqliteQueryBuilder);
-
-        sqlx::query_with(&sql, values).execute(db).await?;
+        sql_exec(
+            db,
+            Query::insert()
+                .into_table(AppDataTable)
+                .columns([
+                    AppDataColumn::Id,
+                    AppDataColumn::Data,
+                    AppDataColumn::CreatedAt,
+                    AppDataColumn::LastModifiedAt,
+                ])
+                .values_panic([
+                    model.id.into(),
+                    data_value.into(),
+                    model.created_at.into(),
+                    model.last_modified_at.into(),
+                ])
+                .on_conflict(
+                    OnConflict::new()
+                        .update_column(AppDataColumn::Data)
+                        .update_column(AppDataColumn::LastModifiedAt)
+                        .to_owned(),
+                ),
+        )
+        .await?;
 
         Ok(model)
     }
 
     pub async fn get_or_default(db: &DbPool) -> anyhow::Result<AppData> {
-        let (sql, values) = Query::select()
-            .from(AppDataTable)
-            .columns([
-                AppDataColumn::Id,
-                AppDataColumn::Data,
-                AppDataColumn::CreatedAt,
-                AppDataColumn::LastModifiedAt,
-            ])
-            .and_where(Expr::col(AppDataColumn::Id).add(Self::SINGLETON_ID))
-            .build_sqlx(SqliteQueryBuilder);
-
-        let result: Option<AppDataModel> =
-            sqlx::query_as_with(&sql, values).fetch_optional(db).await?;
+        let result: Option<AppDataModel> = sql_query_maybe_one(
+            db,
+            Query::select()
+                .from(AppDataTable)
+                .columns([
+                    AppDataColumn::Id,
+                    AppDataColumn::Data,
+                    AppDataColumn::CreatedAt,
+                    AppDataColumn::LastModifiedAt,
+                ])
+                .and_where(Expr::col(AppDataColumn::Id).add(Self::SINGLETON_ID)),
+        )
+        .await?;
 
         let model = match result {
             Some(value) => value,
@@ -305,28 +320,21 @@ impl AppDataModel {
 
     /// HTTP port is loaded pretty frequently
     pub async fn get_http_port(db: &DbPool) -> anyhow::Result<u16> {
-        #[derive(FromRow)]
-        struct PartialModel {
-            http_port: Option<u16>,
-        }
-
-        let (sql, values) = Query::select()
-            .from(AppDataTable)
-            // Select
-            .expr_as(
-                Expr::cust("json_extract(data, '$.main_config.http_port')"),
-                Alias::new("http_port"),
-            )
-            .and_where(Expr::col(AppDataColumn::Id).add(Self::SINGLETON_ID))
-            .build_sqlx(SqliteQueryBuilder);
-
-        let result: Option<PartialModel> =
-            sqlx::query_as_with(&sql, values).fetch_optional(db).await?;
+        let result: Option<(u16,)> = sql_query_maybe_one(
+            db,
+            Query::select()
+                .from(AppDataTable)
+                // Select
+                .expr(Func::coalesce([
+                    Expr::cust("json_extract(data, '$.main_config.http_port')"),
+                    Expr::value(default_http_port()),
+                ]))
+                .and_where(Expr::col(AppDataColumn::Id).add(Self::SINGLETON_ID)),
+        )
+        .await?;
 
         // HTTP port is loaded frequently so save on loading the entire main_config every time
-        let http_port = result
-            .and_then(|value| value.http_port)
-            .unwrap_or_else(default_http_port);
+        let http_port = result.map(|(port,)| port).unwrap_or_else(default_http_port);
 
         // Debug fixed port override
         #[cfg(debug_assertions)]
@@ -346,31 +354,19 @@ impl AppDataModel {
             main_config: MainConfig,
         }
 
-        let (sql, values) = Query::select()
-            .from(AppDataTable)
-            // Select
-            .expr_as(
-                Expr::cust("json_extract(data, '$.main_config')"),
-                Alias::new("main_config"),
-            )
-            .and_where(Expr::col(AppDataColumn::Id).add(Self::SINGLETON_ID))
-            .build_sqlx(SqliteQueryBuilder);
-
-        let result: Option<PartialModel> =
-            sqlx::query_as_with(&sql, values).fetch_optional(db).await?;
+        let result: Option<PartialModel> = sql_query_maybe_one(
+            db,
+            Query::select()
+                .from(AppDataTable)
+                // Select
+                .expr_as(
+                    Expr::cust("json_extract(data, '$.main_config')"),
+                    Alias::new("main_config"),
+                )
+                .and_where(Expr::col(AppDataColumn::Id).add(Self::SINGLETON_ID)),
+        )
+        .await?;
 
         Ok(result.map(|value| value.main_config).unwrap_or_default())
     }
-}
-
-#[derive(IdenStatic, Copy, Clone)]
-#[iden(rename = "app_data")]
-pub struct AppDataTable;
-
-#[derive(IdenStatic, Copy, Clone)]
-pub enum AppDataColumn {
-    Id,
-    Data,
-    CreatedAt,
-    LastModifiedAt,
 }

@@ -9,6 +9,20 @@ use crate::database::{DbPool, DbResult};
 
 use super::shared::UpdateOrdering;
 
+#[derive(IdenStatic, Copy, Clone)]
+#[iden(rename = "sounds")]
+pub struct SoundsTable;
+
+#[derive(IdenStatic, Copy, Clone)]
+pub enum SoundsColumn {
+    Id,
+    Name,
+    Src,
+    Volume,
+    Order,
+    CreatedAt,
+}
+
 #[derive(
     Debug, Clone, Copy, Serialize, Deserialize, strum::Display, strum::EnumString, sqlx::Type,
 )]
@@ -250,18 +264,4 @@ impl SoundModel {
         sqlx::query_with(&sql, values).execute(db).await?;
         Ok(())
     }
-}
-
-#[derive(IdenStatic, Copy, Clone)]
-#[iden(rename = "sounds")]
-pub struct SoundsTable;
-
-#[derive(IdenStatic, Copy, Clone)]
-pub enum SoundsColumn {
-    Id,
-    Name,
-    Src,
-    Volume,
-    Order,
-    CreatedAt,
 }

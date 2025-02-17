@@ -37,7 +37,7 @@ pub struct EventExecutionModel {
 }
 
 #[serde_as]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventExecutionMetadata {
     /// User who triggered the event
     pub user: Option<TwitchEventUser>,
@@ -123,15 +123,17 @@ impl EventExecutionModel {
                 EventExecutionsColumn::CreatedAt,
             ])
             .and_where(Expr::col(EventExecutionsColumn::EventId).eq(event_id))
+            .and_where_option(
+                query
+                    .start_date
+                    .map(|start_date| Expr::col(EventExecutionsColumn::CreatedAt).gt(start_date)),
+            )
+            .and_where_option(
+                query
+                    .end_date
+                    .map(|end_date| Expr::col(EventExecutionsColumn::CreatedAt).lt(end_date)),
+            )
             .order_by(EventExecutionsColumn::CreatedAt, Order::Desc);
-
-        if let Some(start_date) = query.start_date {
-            select.and_where(Expr::col(EventExecutionsColumn::CreatedAt).gt(start_date));
-        }
-
-        if let Some(end_date) = query.end_date {
-            select.and_where(Expr::col(EventExecutionsColumn::CreatedAt).lt(end_date));
-        }
 
         if let Some(offset) = query.offset {
             select.offset(offset);
