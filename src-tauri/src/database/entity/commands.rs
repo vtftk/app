@@ -2,7 +2,10 @@ use super::{
     command_alias::{CommandAliasColumn, CommandAliasModel, CommandAliasTable},
     shared::{MinimumRequireRole, UpdateOrdering},
 };
-use crate::database::{DbPool, DbResult};
+use crate::database::{
+    helpers::{sql_exec, sql_query_all, sql_query_maybe_one},
+    DbPool, DbResult,
+};
 use chrono::{DateTime, Utc};
 use sea_query::{
     Alias, CaseStatement, Condition, Expr, Func, IdenStatic, JoinType, Order, Query,
@@ -162,59 +165,57 @@ impl CommandModel {
     /// Find commands by the actual command trigger word
     /// and only commands that are enabled
     pub async fn get_by_command(db: &DbPool, command: &str) -> DbResult<Vec<CommandModel>> {
-        let (sql, values) = Query::select()
-            .from(CommandsTable)
-            .columns(CommandModel::columns())
-            .join_as(
-                JoinType::LeftJoin,
-                CommandAliasTable,
-                Alias::new("alias"),
-                Expr::col((CommandsTable, CommandsColumn::Id))
-                    .equals((CommandAliasTable, CommandAliasColumn::CommandId)),
-            )
-            .cond_where(
-                Condition::any()
-                    .add(Expr::expr(Func::lower(Expr::col(CommandsColumn::Command))).eq(command))
-                    .add(Expr::expr(Func::lower(Expr::col(CommandAliasColumn::Alias))).eq(command)),
-            )
-            .and_where(Expr::col(CommandsColumn::Enabled).eq(true))
-            .group_by_col(CommandsColumn::Id)
-            .build_sqlx(SqliteQueryBuilder);
-
-        let results = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
-        Ok(results)
-    }
-
-    pub async fn delete(self, db: &DbPool) -> DbResult<()> {
-        let (sql, values) = Query::delete()
-            .from_table(CommandsTable)
-            .and_where(Expr::col(CommandsColumn::Id).eq(self.id))
-            .build_sqlx(SqliteQueryBuilder);
-        sqlx::query_with(&sql, values).execute(db).await?;
-        Ok(())
+        sql_query_all(
+            db,
+            Query::select()
+                .from(CommandsTable)
+                .columns(CommandModel::columns())
+                .join_as(
+                    JoinType::LeftJoin,
+                    CommandAliasTable,
+                    Alias::new("alias"),
+                    Expr::col((CommandsTable, CommandsColumn::Id))
+                        .equals((CommandAliasTable, CommandAliasColumn::CommandId)),
+                )
+                .cond_where(
+                    Condition::any()
+                        .add(
+                            Expr::expr(Func::lower(Expr::col(CommandsColumn::Command))).eq(command),
+                        )
+                        .add(
+                            Expr::expr(Func::lower(Expr::col(CommandAliasColumn::Alias)))
+                                .eq(command),
+                        ),
+                )
+                .and_where(Expr::col(CommandsColumn::Enabled).eq(true))
+                .group_by_col(CommandsColumn::Id),
+        )
+        .await
     }
 
     pub async fn get_by_id(db: &DbPool, id: Uuid) -> DbResult<Option<Self>> {
-        let (sql, values) = Query::select()
-            .columns(CommandModel::columns())
-            .from(CommandsTable)
-            .and_where(Expr::col(CommandsColumn::Id).eq(id))
-            .build_sqlx(SqliteQueryBuilder);
-        let result = sqlx::query_as_with(&sql, values).fetch_optional(db).await?;
-        Ok(result)
+        sql_query_maybe_one(
+            db,
+            Query::select()
+                .columns(CommandModel::columns())
+                .from(CommandsTable)
+                .and_where(Expr::col(CommandsColumn::Id).eq(id)),
+        )
+        .await
     }
 
     pub async fn all(db: &DbPool) -> DbResult<Vec<Self>> {
-        let (sql, values) = Query::select()
-            .columns(CommandModel::columns())
-            .from(CommandsTable)
-            .order_by_columns([
-                (CommandsColumn::Order, Order::Asc),
-                (CommandsColumn::CreatedAt, Order::Desc),
-            ])
-            .build_sqlx(SqliteQueryBuilder);
-        let result = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
-        Ok(result)
+        sql_query_all(
+            db,
+            Query::select()
+                .columns(CommandModel::columns())
+                .from(CommandsTable)
+                .order_by_columns([
+                    (CommandsColumn::Order, Order::Asc),
+                    (CommandsColumn::CreatedAt, Order::Desc),
+                ]),
+        )
+        .await
     }
 
     pub async fn update(&mut self, db: &DbPool, data: UpdateCommand) -> anyhow::Result<()> {
@@ -263,6 +264,8 @@ impl CommandModel {
             update.value(CommandsColumn::Order, Expr::value(order));
         }
 
+        sql_exec(db, &update).await?;
+
         if let Some(aliases) = data.aliases {
             CommandAliasModel::set_aliases(db, self.id, aliases).await?;
         }
@@ -284,14 +287,25 @@ impl CommandModel {
                 );
             }
 
-            let (sql, values) = Query::update()
-                .table(CommandsTable)
-                .value(CommandsColumn::Order, case)
-                .build_sqlx(SqliteQueryBuilder);
-
-            sqlx::query_with(&sql, values).execute(db).await?;
+            sql_exec(
+                db,
+                Query::update()
+                    .table(CommandsTable)
+                    .value(CommandsColumn::Order, case),
+            )
+            .await?
         }
 
         Ok(())
+    }
+
+    pub async fn delete(self, db: &DbPool) -> DbResult<()> {
+        sql_exec(
+            db,
+            Query::delete()
+                .from_table(CommandsTable)
+                .and_where(Expr::col(CommandsColumn::Id).eq(self.id)),
+        )
+        .await
     }
 }

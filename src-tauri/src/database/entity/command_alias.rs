@@ -61,7 +61,6 @@ impl CommandAliasModel {
     /// (Removes the previous set and creates the new one)
     pub async fn set_aliases(db: &DbPool, command_id: Uuid, aliases: Vec<String>) -> DbResult<()> {
         // Delete all command aliases for the command
-
         sql_exec(
             db,
             Query::delete()
