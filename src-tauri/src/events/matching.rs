@@ -16,6 +16,7 @@ use crate::{
         entity::{
             chat_history::{ChatHistoryModel, CreateChatHistory},
             commands::CommandModel,
+            event_execution::EventExecutionModel,
             events::{EventModel, EventTrigger, EventTriggerType},
         },
         DbPool,
@@ -625,8 +626,7 @@ pub async fn match_timer_complete_event(
 
     // Ensure minimum chat messages has been reached
     if min_chat_messages > 0 {
-        let last_execution = event
-            .last_execution(db, 0)
+        let last_execution = EventExecutionModel::last(db, event.id, 0)
             .await
             .context("failed to get last execution")?;
 

@@ -72,7 +72,7 @@ impl SoundModel {
         ]
     }
 
-    /// Create a new sound
+    /// Create a sound
     pub async fn create(db: &DbPool, create: CreateSound) -> anyhow::Result<SoundModel> {
         let id = Uuid::new_v4();
         let model = SoundModel {
@@ -134,6 +134,7 @@ impl SoundModel {
         let result = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
         Ok(result)
     }
+
     /// Find sounds with IDs present in the provided list
     pub async fn get_by_ids_partial(db: &DbPool, ids: &[Uuid]) -> DbResult<Vec<PartialSoundModel>> {
         let (sql, values) = Query::select()

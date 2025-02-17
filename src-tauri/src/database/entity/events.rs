@@ -1,20 +1,14 @@
 use chrono::{DateTime, Utc};
-use sea_query::{Alias, CaseStatement, Expr, Func, IdenStatic, Order, Query, SqliteQueryBuilder};
+use sea_query::{CaseStatement, Expr, IdenStatic, Order, Query, SqliteQueryBuilder};
 use sea_query_binder::SqlxBinder;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use sqlx::prelude::FromRow;
 use strum::{Display, EnumString};
 use uuid::Uuid;
 
-use crate::{
-    database::{DbPool, DbResult},
-    events::TwitchEventUser,
-};
+use crate::database::{DbPool, DbResult};
 
-use super::shared::{
-    ExecutionsQuery, LoggingLevelDb, LogsQuery, MinMax, MinimumRequireRole, UpdateOrdering,
-};
+use super::shared::{MinMax, MinimumRequireRole, UpdateOrdering};
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct EventModel {
@@ -46,48 +40,6 @@ pub struct EventModel {
 
     // Date time of creation
     pub created_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct EventLogsModel {
-    /// Unique ID of the log
-    pub id: Uuid,
-    /// ID of the event
-    pub event_id: Uuid,
-    /// Level of the log
-    pub level: LoggingLevelDb,
-    /// Logging message
-    pub message: String,
-    /// Creation time of the event
-    pub created_at: DateTime<Utc>,
-}
-
-#[derive(Debug)]
-pub struct CreateEventExecution {
-    pub event_id: Uuid,
-    pub metadata: EventExecutionMetadata,
-    pub created_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct EventExecutionModel {
-    pub id: Uuid,
-    pub event_id: Uuid,
-    #[sqlx(json)]
-    pub metadata: EventExecutionMetadata,
-    pub created_at: DateTime<Utc>,
-}
-
-#[serde_as]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct EventExecutionMetadata {
-    /// User who triggered the event
-    pub user: Option<TwitchEventUser>,
-
-    /// Catchall for any other metadata
-    #[serde(flatten)]
-    #[serde_as(as = "serde_with::Map<_, _>")]
-    pub data: Vec<(String, serde_json::Value)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -339,14 +291,6 @@ pub struct UpdateEvent {
     pub order: Option<u32>,
 }
 
-#[derive(Debug)]
-pub struct CreateEventLog {
-    pub event_id: Uuid,
-    pub level: LoggingLevelDb,
-    pub message: String,
-    pub created_at: DateTime<Utc>,
-}
-
 impl EventModel {
     fn columns() -> [EventsColumn; 11] {
         [
@@ -415,30 +359,6 @@ impl EventModel {
             .build_sqlx(SqliteQueryBuilder);
         let result = sqlx::query_as_with(&sql, values).fetch_optional(db).await?;
         Ok(result)
-    }
-
-    /// Find the most recent execution of this event
-    pub async fn last_execution(
-        &self,
-        db: &DbPool,
-        offset: u64,
-    ) -> DbResult<Option<EventExecutionModel>> {
-        let (sql, values) = Query::select()
-            .from(EventExecutionsTable)
-            .columns([
-                EventExecutionsColumn::Id,
-                EventExecutionsColumn::EventId,
-                EventExecutionsColumn::Metadata,
-                EventExecutionsColumn::CreatedAt,
-            ])
-            .and_where(Expr::col(EventExecutionsColumn::EventId).eq(self.id))
-            .offset(offset)
-            .order_by(EventExecutionsColumn::CreatedAt, Order::Desc)
-            .build_sqlx(SqliteQueryBuilder);
-
-        let value: Option<EventExecutionModel> =
-            sqlx::query_as_with(&sql, values).fetch_optional(db).await?;
-        Ok(value)
     }
 
     /// Find a specific event by a specific trigger type
@@ -562,220 +482,6 @@ impl EventModel {
         Ok(())
     }
 
-    pub async fn get_executions(
-        &self,
-        db: &DbPool,
-        query: ExecutionsQuery,
-    ) -> DbResult<Vec<EventExecutionModel>> {
-        let mut select = Query::select();
-        select
-            .from(EventExecutionsTable)
-            .columns([
-                EventExecutionsColumn::Id,
-                EventExecutionsColumn::EventId,
-                EventExecutionsColumn::Metadata,
-                EventExecutionsColumn::CreatedAt,
-            ])
-            .and_where(Expr::col(EventExecutionsColumn::EventId).eq(self.id))
-            .order_by(EventExecutionsColumn::CreatedAt, Order::Desc);
-
-        if let Some(start_date) = query.start_date {
-            select.and_where(Expr::col(EventExecutionsColumn::CreatedAt).gt(start_date));
-        }
-
-        if let Some(end_date) = query.end_date {
-            select.and_where(Expr::col(EventExecutionsColumn::CreatedAt).lt(end_date));
-        }
-
-        if let Some(offset) = query.offset {
-            select.offset(offset);
-        }
-
-        if let Some(limit) = query.limit {
-            select.limit(limit);
-        }
-
-        let (sql, values) = select.build_sqlx(SqliteQueryBuilder);
-        let results = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
-        Ok(results)
-    }
-
-    pub async fn get_logs(&self, db: &DbPool, query: LogsQuery) -> DbResult<Vec<EventLogsModel>> {
-        let mut select = Query::select();
-        select
-            .from(EventLogsTable)
-            .columns([
-                EventLogsColumn::Id,
-                EventLogsColumn::EventId,
-                EventLogsColumn::Level,
-                EventLogsColumn::Message,
-                EventLogsColumn::CreatedAt,
-            ])
-            .and_where(Expr::col(EventLogsColumn::EventId).eq(self.id))
-            .order_by(EventLogsColumn::CreatedAt, Order::Desc);
-
-        if let Some(level) = query.level {
-            select.and_where(Expr::col(EventLogsColumn::Level).eq(level as i32));
-        }
-
-        if let Some(start_date) = query.start_date {
-            select.and_where(Expr::col(EventLogsColumn::CreatedAt).gt(start_date));
-        }
-
-        if let Some(end_date) = query.end_date {
-            select.and_where(Expr::col(EventLogsColumn::CreatedAt).lt(end_date));
-        }
-
-        if let Some(offset) = query.offset {
-            select.offset(offset);
-        }
-
-        if let Some(limit) = query.limit {
-            select.limit(limit);
-        }
-
-        let (sql, values) = select.build_sqlx(SqliteQueryBuilder);
-        let results = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
-        Ok(results)
-    }
-
-    /// Create a new script
-    pub async fn create_log(db: &DbPool, create: CreateEventLog) -> DbResult<()> {
-        let id = Uuid::new_v4();
-
-        let (sql, values) = Query::insert()
-            .into_table(EventLogsTable)
-            .columns([
-                EventLogsColumn::Id,
-                EventLogsColumn::EventId,
-                EventLogsColumn::Level,
-                EventLogsColumn::Message,
-                EventLogsColumn::CreatedAt,
-            ])
-            .values_panic([
-                id.into(),
-                create.event_id.into(),
-                (create.level as i32).into(),
-                create.message.to_string().into(),
-                create.created_at.into(),
-            ])
-            .build_sqlx(SqliteQueryBuilder);
-
-        sqlx::query_with(&sql, values).execute(db).await?;
-
-        Ok(())
-    }
-
-    /// Create a new script
-    pub async fn create_execution(
-        db: &DbPool,
-        create: CreateEventExecution,
-    ) -> anyhow::Result<EventExecutionModel> {
-        let id = Uuid::new_v4();
-        let model = EventExecutionModel {
-            id,
-            event_id: create.event_id,
-            metadata: create.metadata,
-            created_at: create.created_at,
-        };
-
-        let metadata_value = serde_json::to_value(&model.metadata)?;
-
-        let (sql, values) = Query::insert()
-            .into_table(EventExecutionsTable)
-            .columns([
-                EventExecutionsColumn::Id,
-                EventExecutionsColumn::EventId,
-                EventExecutionsColumn::Metadata,
-                EventExecutionsColumn::CreatedAt,
-            ])
-            .values_panic([
-                model.id.into(),
-                model.event_id.into(),
-                metadata_value.into(),
-                model.created_at.into(),
-            ])
-            .build_sqlx(SqliteQueryBuilder);
-
-        sqlx::query_with(&sql, values).execute(db).await?;
-
-        Ok(model)
-    }
-
-    pub async fn delete_executions_before(db: &DbPool, start_date: DateTime<Utc>) -> DbResult<()> {
-        let (sql, values) = Query::delete()
-            .from_table(EventExecutionsTable)
-            .and_where(Expr::col(EventExecutionsColumn::CreatedAt).lt(start_date))
-            .build_sqlx(SqliteQueryBuilder);
-        sqlx::query_with(&sql, values).execute(db).await?;
-        Ok(())
-    }
-
-    pub async fn delete_many_executions(db: &DbPool, ids: &[Uuid]) -> DbResult<()> {
-        let (sql, values) = Query::delete()
-            .from_table(EventExecutionsTable)
-            .and_where(Expr::col(EventExecutionsColumn::Id).is_in(ids.iter().copied()))
-            .build_sqlx(SqliteQueryBuilder);
-        sqlx::query_with(&sql, values).execute(db).await?;
-        Ok(())
-    }
-
-    pub async fn delete_many_logs(db: &DbPool, ids: &[Uuid]) -> DbResult<()> {
-        let (sql, values) = Query::delete()
-            .from_table(EventLogsTable)
-            .and_where(Expr::col(EventLogsColumn::Id).is_in(ids.iter().copied()))
-            .build_sqlx(SqliteQueryBuilder);
-        sqlx::query_with(&sql, values).execute(db).await?;
-        Ok(())
-    }
-
-    pub async fn delete_logs_before(db: &DbPool, start_date: DateTime<Utc>) -> DbResult<()> {
-        let (sql, values) = Query::delete()
-            .from_table(EventLogsTable)
-            .and_where(Expr::col(EventLogsColumn::CreatedAt).lt(start_date))
-            .build_sqlx(SqliteQueryBuilder);
-        sqlx::query_with(&sql, values).execute(db).await?;
-        Ok(())
-    }
-
-    pub async fn get_logs_estimate_size(db: &DbPool) -> DbResult<u32> {
-        #[derive(Default, FromRow)]
-        struct PartialModel {
-            total_message_length: Option<u32>,
-        }
-
-        let (sql, values) = Query::select()
-            .from(EventLogsTable)
-            .expr_as(
-                Func::sum(Func::char_length(Expr::col(EventLogsColumn::Message))),
-                Alias::new("total_message_length"),
-            )
-            .build_sqlx(SqliteQueryBuilder);
-
-        let result: PartialModel = sqlx::query_as_with(&sql, values).fetch_one(db).await?;
-        Ok(result.total_message_length.unwrap_or_default())
-    }
-
-    pub async fn get_executions_estimate_size(db: &DbPool) -> DbResult<u32> {
-        #[derive(Default, FromRow)]
-        struct PartialModel {
-            total_message_length: Option<u32>,
-        }
-
-        let (sql, values) = Query::select()
-            .from(EventExecutionsTable)
-            .expr_as(
-                Func::sum(Func::char_length(Expr::col(
-                    EventExecutionsColumn::Metadata,
-                ))),
-                Alias::new("total_message_length"),
-            )
-            .build_sqlx(SqliteQueryBuilder);
-
-        let result: PartialModel = sqlx::query_as_with(&sql, values).fetch_one(db).await?;
-        Ok(result.total_message_length.unwrap_or_default())
-    }
-
     pub async fn delete(self, db: &DbPool) -> DbResult<()> {
         let (sql, values) = Query::delete()
             .from_table(EventsTable)
@@ -802,30 +508,5 @@ pub enum EventsColumn {
     RequireRole,
     OutcomeDelay,
     Order,
-    CreatedAt,
-}
-
-#[derive(IdenStatic, Copy, Clone)]
-#[iden(rename = "event_logs")]
-pub struct EventLogsTable;
-
-#[derive(IdenStatic, Copy, Clone)]
-pub enum EventLogsColumn {
-    Id,
-    EventId,
-    Level,
-    Message,
-    CreatedAt,
-}
-
-#[derive(IdenStatic, Copy, Clone)]
-#[iden(rename = "event_executions")]
-pub struct EventExecutionsTable;
-
-#[derive(IdenStatic, Copy, Clone)]
-pub enum EventExecutionsColumn {
-    Id,
-    EventId,
-    Metadata,
     CreatedAt,
 }

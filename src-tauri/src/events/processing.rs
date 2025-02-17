@@ -4,7 +4,8 @@ use crate::{
             commands::{
                 CommandExecutionMetadata, CommandModel, CommandOutcome, CreateCommandExecution,
             },
-            events::{CreateEventExecution, EventExecutionMetadata, EventModel},
+            event_execution::{CreateEventExecution, EventExecutionMetadata, EventExecutionModel},
+            events::EventModel,
             shared::MinimumRequireRole,
         },
         DbPool,
@@ -389,8 +390,7 @@ pub async fn is_event_cooldown_elapsed(
 
     // Handle global cooldown (Check last execution)
     if !cooldown.per_user {
-        let last_execution = event
-            .last_execution(db, 0)
+        let last_execution = EventExecutionModel::last(db, event.id, 0)
             .await
             .context("failed to request last execution for event")?;
 
@@ -411,8 +411,7 @@ pub async fn is_event_cooldown_elapsed(
     let mut offset = 0;
 
     loop {
-        let last_execution = event
-            .last_execution(db, offset)
+        let last_execution = EventExecutionModel::last(db, event.id, offset)
             .await
             .context("failed to request last execution for event")?;
 
@@ -498,7 +497,7 @@ pub async fn execute_event(
     }
 
     // Store event execution
-    EventModel::create_execution(
+    EventExecutionModel::create(
         db,
         CreateEventExecution {
             event_id,

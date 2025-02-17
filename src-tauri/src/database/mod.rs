@@ -3,13 +3,14 @@ use chrono::{Days, Utc};
 
 use entity::{
     app_data::AppDataModel, chat_history::ChatHistoryModel, commands::CommandModel,
-    events::EventModel,
+    event_execution::EventExecutionModel, event_log::EventLogsModel, events::EventModel,
 };
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use std::{path::PathBuf, str::FromStr};
 use tokio::fs::{create_dir_all, File};
 
 pub mod entity;
+pub mod helpers;
 mod migrations;
 
 pub type DbPool = SqlitePool;
@@ -69,7 +70,7 @@ pub async fn clean_old_data(db: DbPool) -> anyhow::Result<()> {
             .checked_sub_days(Days::new(main_config.clean_logs_days))
             .context("system time is incorrect")?;
 
-        EventModel::delete_logs_before(&db, clean_date).await?;
+        EventLogsModel::delete_before(&db, clean_date).await?;
         CommandModel::delete_logs_before(&db, clean_date).await?;
     }
 
@@ -79,7 +80,7 @@ pub async fn clean_old_data(db: DbPool) -> anyhow::Result<()> {
             .checked_sub_days(Days::new(main_config.clean_executions_days))
             .context("system time is incorrect")?;
 
-        EventModel::delete_executions_before(&db, clean_date).await?;
+        EventExecutionModel::delete_before(&db, clean_date).await?;
         CommandModel::delete_executions_before(&db, clean_date).await?;
     }
 

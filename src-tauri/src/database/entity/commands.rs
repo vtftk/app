@@ -10,7 +10,7 @@ use sqlx::prelude::FromRow;
 use uuid::Uuid;
 
 use crate::{
-    database::{entity::events::EventExecutionsColumn, DbPool, DbResult},
+    database::{DbPool, DbResult},
     events::TwitchEventUser,
 };
 
@@ -644,7 +644,7 @@ impl CommandModel {
             .from(CommandExecutionsTable)
             .expr_as(
                 Func::sum(Func::char_length(Expr::col(
-                    EventExecutionsColumn::Metadata,
+                    CommandExecutionsColumn::Metadata,
                 ))),
                 Alias::new("total_message_length"),
             )

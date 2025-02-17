@@ -6,10 +6,9 @@ use super::CmdResult;
 use crate::{
     database::{
         entity::{
-            events::{
-                CreateEvent, EventExecutionModel, EventLogsModel, EventModel, EventTrigger,
-                EventTriggerType, UpdateEvent,
-            },
+            event_execution::EventExecutionModel,
+            event_log::EventLogsModel,
+            events::{CreateEvent, EventModel, EventTrigger, EventTriggerType, UpdateEvent},
             shared::{ExecutionsQuery, LogsQuery, UpdateOrdering},
         },
         DbPool,
@@ -172,7 +171,8 @@ pub async fn get_event_executions(
     let event = EventModel::get_by_id(db, event_id)
         .await?
         .context("unknown event")?;
-    let executions = event.get_executions(db, query).await?;
+
+    let executions = EventExecutionModel::query(db, event.id, query).await?;
     Ok(executions)
 }
 
@@ -182,7 +182,7 @@ pub async fn delete_event_executions(
     db: State<'_, DbPool>,
 ) -> CmdResult<()> {
     let db = db.inner();
-    EventModel::delete_many_executions(db, &execution_ids).await?;
+    EventExecutionModel::delete_by_ids(db, &execution_ids).await?;
     Ok(())
 }
 
@@ -196,13 +196,13 @@ pub async fn get_event_logs(
     let event = EventModel::get_by_id(db, event_id)
         .await?
         .context("event not found")?;
-    let logs = event.get_logs(db, query).await?;
+    let logs = EventLogsModel::query(db, event.id, query).await?;
     Ok(logs)
 }
 
 #[tauri::command]
 pub async fn delete_event_logs(log_ids: Vec<Uuid>, db: State<'_, DbPool>) -> CmdResult<()> {
     let db = db.inner();
-    EventModel::delete_many_logs(db, &log_ids).await?;
+    EventLogsModel::delete_by_ids(db, &log_ids).await?;
     Ok(())
 }
