@@ -1,12 +1,13 @@
 use crate::{
-    database::entity::{
-        command_executions::{
-            CommandExecutionMetadata, CommandExecutionModel, CreateCommandExecution,
+    database::{
+        entity::{
+            commands::{
+                CommandExecutionMetadata, CommandModel, CommandOutcome, CreateCommandExecution,
+            },
+            events::{CreateEventExecution, EventExecutionMetadata, EventModel},
+            shared::MinimumRequireRole,
         },
-        commands::{CommandModel, CommandOutcome},
-        event_executions::{CreateEventExecution, EventExecutionMetadata, EventExecutionModel},
-        events::EventModel,
-        shared::MinimumRequireRole,
+        DbPool,
     },
     events::{
         matching::{
@@ -26,10 +27,9 @@ use crate::{
     twitch::manager::Twitch,
 };
 use anyhow::{anyhow, Context};
-use chrono::TimeDelta;
+use chrono::{DateTime, TimeDelta, Utc};
 use futures::{future::BoxFuture, stream::FuturesUnordered, Stream};
 use log::{debug, error};
-use sea_orm::{prelude::DateTimeUtc, sqlx::types::chrono::Utc, DatabaseConnection};
 use std::{future::poll_fn, task::Poll, time::Duration};
 use tauri::{AppHandle, Emitter};
 use tokio::try_join;
@@ -38,7 +38,7 @@ use twitch_api::types::UserId;
 use super::AppEventReceiver;
 
 pub async fn process_events(
-    db: DatabaseConnection,
+    db: DbPool,
     twitch: Twitch,
     script_handle: ScriptExecutorHandle,
     event_sender: OverlayMessageSender,
@@ -85,7 +85,7 @@ pub async fn process_events(
 }
 
 async fn process_event(
-    db: &DatabaseConnection,
+    db: &DbPool,
     twitch: &Twitch,
     script_handle: &ScriptExecutorHandle,
     event_sender: &OverlayMessageSender,
@@ -183,8 +183,8 @@ async fn process_event(
 }
 
 pub fn is_cooldown_elapsed(
-    execution_time: DateTimeUtc,
-    current_time: DateTimeUtc,
+    execution_time: DateTime<Utc>,
+    current_time: DateTime<Utc>,
     cooldown: u32,
 ) -> anyhow::Result<bool> {
     let cooldown_end_time = execution_time
@@ -195,10 +195,10 @@ pub fn is_cooldown_elapsed(
 }
 
 pub async fn is_command_cooldown_elapsed(
-    db: &DatabaseConnection,
+    db: &DbPool,
     command: &CommandModel,
     user: &TwitchEventUser,
-    current_time: DateTimeUtc,
+    current_time: DateTime<Utc>,
 ) -> anyhow::Result<bool> {
     let cooldown = &command.cooldown;
 
@@ -262,7 +262,7 @@ pub async fn is_command_cooldown_elapsed(
 }
 
 pub async fn execute_command(
-    db: &DatabaseConnection,
+    db: &DbPool,
     script_handle: &ScriptExecutorHandle,
     twitch: &Twitch,
     command: CommandWithContext,
@@ -360,7 +360,7 @@ pub async fn execute_command(
     }
 
     // Store command execution
-    CommandExecutionModel::create(
+    CommandModel::create_execution(
         db,
         CreateCommandExecution {
             command_id: command.command.id,
@@ -375,10 +375,10 @@ pub async fn execute_command(
 }
 
 pub async fn is_event_cooldown_elapsed(
-    db: &DatabaseConnection,
+    db: &DbPool,
     event: &EventModel,
     user: Option<&TwitchEventUser>,
-    current_time: DateTimeUtc,
+    current_time: DateTime<Utc>,
 ) -> anyhow::Result<bool> {
     let cooldown = &event.cooldown;
 
@@ -448,7 +448,7 @@ pub async fn is_event_cooldown_elapsed(
 }
 
 pub async fn execute_event(
-    db: &DatabaseConnection,
+    db: &DbPool,
     twitch: &Twitch,
     script_handle: &ScriptExecutorHandle,
 
@@ -498,7 +498,7 @@ pub async fn execute_event(
     }
 
     // Store event execution
-    EventExecutionModel::create(
+    EventModel::create_execution(
         db,
         CreateEventExecution {
             event_id,

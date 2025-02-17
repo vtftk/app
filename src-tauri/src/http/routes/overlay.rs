@@ -1,4 +1,5 @@
 use crate::database::entity::app_data::{AppDataModel, OverlayConfig};
+use crate::database::DbPool;
 use crate::http::error::HttpResult;
 use crate::http::models::UpdateRuntimeAppData;
 use crate::overlay::{OverlayDataStore, OverlayEventStream, OverlayMessageReceiver, OVERLAY_PAGE};
@@ -14,7 +15,6 @@ use axum::{
 use futures::Stream;
 use reqwest::header::CONTENT_TYPE;
 use reqwest::StatusCode;
-use sea_orm::DatabaseConnection;
 use std::convert::Infallible;
 
 /// Embedded icon for VTube studio
@@ -38,9 +38,7 @@ pub async fn icon() -> impl IntoResponse {
 /// GET /overlay/config
 ///
 /// Get the overlay configuration data
-pub async fn get_overlay_config(
-    Extension(db): Extension<DatabaseConnection>,
-) -> HttpResult<OverlayConfig> {
+pub async fn get_overlay_config(Extension(db): Extension<DbPool>) -> HttpResult<OverlayConfig> {
     let data = AppDataModel::get_or_default(&db).await?;
     Ok(Json(data.overlay))
 }

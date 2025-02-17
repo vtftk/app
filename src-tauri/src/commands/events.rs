@@ -4,11 +4,15 @@
 
 use super::CmdResult;
 use crate::{
-    database::entity::{
-        event_executions::EventExecutionModel,
-        event_logs::EventLogsModel,
-        events::{CreateEvent, EventModel, EventTrigger, EventTriggerType, UpdateEvent},
-        shared::{ExecutionsQuery, LogsQuery, UpdateOrdering},
+    database::{
+        entity::{
+            events::{
+                CreateEvent, EventExecutionModel, EventLogsModel, EventModel, EventTrigger,
+                EventTriggerType, UpdateEvent,
+            },
+            shared::{ExecutionsQuery, LogsQuery, UpdateOrdering},
+        },
+        DbPool,
     },
     events::{
         matching::EventData,
@@ -20,12 +24,11 @@ use crate::{
     twitch::manager::Twitch,
 };
 use anyhow::Context;
-use sea_orm::{DatabaseConnection, ModelTrait};
 use tauri::State;
 use uuid::Uuid;
 
 #[tauri::command]
-pub async fn get_events(db: State<'_, DatabaseConnection>) -> CmdResult<Vec<EventModel>> {
+pub async fn get_events(db: State<'_, DbPool>) -> CmdResult<Vec<EventModel>> {
     let db = db.inner();
     let events = EventModel::all(db).await?;
     Ok(events)
@@ -34,7 +37,7 @@ pub async fn get_events(db: State<'_, DatabaseConnection>) -> CmdResult<Vec<Even
 #[tauri::command]
 pub async fn get_event_by_id(
     event_id: Uuid,
-    db: State<'_, DatabaseConnection>,
+    db: State<'_, DbPool>,
 ) -> CmdResult<Option<EventModel>> {
     let db = db.inner();
     let event = EventModel::get_by_id(db, event_id).await?;
@@ -44,7 +47,7 @@ pub async fn get_event_by_id(
 #[tauri::command]
 pub async fn create_event(
     create: CreateEvent,
-    db: State<'_, DatabaseConnection>,
+    db: State<'_, DbPool>,
     scheduler: State<'_, SchedulerHandle>,
 ) -> CmdResult<EventModel> {
     let db = db.inner();
@@ -62,14 +65,14 @@ pub async fn create_event(
 pub async fn update_event(
     event_id: Uuid,
     update: UpdateEvent,
-    db: State<'_, DatabaseConnection>,
+    db: State<'_, DbPool>,
     scheduler: State<'_, SchedulerHandle>,
 ) -> CmdResult<EventModel> {
     let db = db.inner();
-    let event = EventModel::get_by_id(db, event_id)
+    let mut event = EventModel::get_by_id(db, event_id)
         .await?
         .context("event not found")?;
-    let event = event.update(db, update).await?;
+    event.update(db, update).await?;
 
     // Update the event scheduler
     if let EventTrigger::Timer { .. } = event.trigger {
@@ -82,7 +85,7 @@ pub async fn update_event(
 #[tauri::command]
 pub async fn delete_event(
     event_id: Uuid,
-    db: State<'_, DatabaseConnection>,
+    db: State<'_, DbPool>,
     scheduler: State<'_, SchedulerHandle>,
 ) -> CmdResult<()> {
     let db = db.inner();
@@ -104,7 +107,7 @@ pub async fn delete_event(
 
 /// Sets the current set of events for the scheduler by fetching the ucrrent list of
 /// timer events from the database
-pub async fn update_scheduler_events(db: &DatabaseConnection, scheduler: &SchedulerHandle) {
+pub async fn update_scheduler_events(db: &DbPool, scheduler: &SchedulerHandle) {
     if let Ok(events) = EventModel::get_by_trigger_type(db, EventTriggerType::Timer).await {
         // Map into scheduler events
         let scheduled = events
@@ -130,7 +133,7 @@ pub async fn update_scheduler_events(db: &DatabaseConnection, scheduler: &Schedu
 pub async fn test_event_by_id(
     event_id: Uuid,
     event_data: EventData,
-    db: State<'_, DatabaseConnection>,
+    db: State<'_, DbPool>,
     event_sender: State<'_, OverlayMessageSender>,
     twitch: State<'_, Twitch>,
     script_handle: State<'_, ScriptExecutorHandle>,
@@ -152,7 +155,7 @@ pub async fn test_event_by_id(
 #[tauri::command]
 pub async fn update_event_orderings(
     update: Vec<UpdateOrdering>,
-    db: State<'_, DatabaseConnection>,
+    db: State<'_, DbPool>,
 ) -> CmdResult<()> {
     let db = db.inner();
     EventModel::update_order(db, update).await?;
@@ -163,7 +166,7 @@ pub async fn update_event_orderings(
 pub async fn get_event_executions(
     event_id: Uuid,
     query: ExecutionsQuery,
-    db: State<'_, DatabaseConnection>,
+    db: State<'_, DbPool>,
 ) -> CmdResult<Vec<EventExecutionModel>> {
     let db = db.inner();
     let event = EventModel::get_by_id(db, event_id)
@@ -176,10 +179,10 @@ pub async fn get_event_executions(
 #[tauri::command]
 pub async fn delete_event_executions(
     execution_ids: Vec<Uuid>,
-    db: State<'_, DatabaseConnection>,
+    db: State<'_, DbPool>,
 ) -> CmdResult<()> {
     let db = db.inner();
-    EventExecutionModel::delete_many(db, &execution_ids).await?;
+    EventModel::delete_many_executions(db, &execution_ids).await?;
     Ok(())
 }
 
@@ -187,7 +190,7 @@ pub async fn delete_event_executions(
 pub async fn get_event_logs(
     event_id: Uuid,
     query: LogsQuery,
-    db: State<'_, DatabaseConnection>,
+    db: State<'_, DbPool>,
 ) -> CmdResult<Vec<EventLogsModel>> {
     let db = db.inner();
     let event = EventModel::get_by_id(db, event_id)
@@ -198,11 +201,8 @@ pub async fn get_event_logs(
 }
 
 #[tauri::command]
-pub async fn delete_event_logs(
-    log_ids: Vec<Uuid>,
-    db: State<'_, DatabaseConnection>,
-) -> CmdResult<()> {
+pub async fn delete_event_logs(log_ids: Vec<Uuid>, db: State<'_, DbPool>) -> CmdResult<()> {
     let db = db.inner();
-    EventLogsModel::delete_many(db, &log_ids).await?;
+    EventModel::delete_many_logs(db, &log_ids).await?;
     Ok(())
 }

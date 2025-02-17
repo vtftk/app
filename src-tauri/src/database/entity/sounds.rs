@@ -1,23 +1,25 @@
-use super::shared::{DbResult, UpdateOrdering};
-use anyhow::Context;
-use chrono::Utc;
-use futures::{future::BoxFuture, stream::FuturesUnordered, TryStreamExt};
-use sea_orm::{
-    entity::prelude::*,
-    sea_query::{CaseStatement, Func},
-    ActiveValue::Set,
-    FromQueryResult, IntoActiveModel, QueryOrder, UpdateResult,
-};
+use chrono::{DateTime, Utc};
+use sea_query::{CaseStatement, Expr, Func, IdenStatic, Order, Query, SqliteQueryBuilder};
+use sea_query_binder::SqlxBinder;
 use serde::{Deserialize, Serialize};
+use sqlx::prelude::FromRow;
+use uuid::Uuid;
 
-// Type alias helpers for the database entity types
-pub type SoundModel = Model;
+use crate::database::{DbPool, DbResult};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "sounds")]
-pub struct Model {
+use super::shared::UpdateOrdering;
+
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, strum::Display, strum::EnumString, sqlx::Type,
+)]
+pub enum SoundType {
+    Impact,
+    Windup,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct SoundModel {
     /// Unique ID for the sound
-    #[sea_orm(primary_key)]
     pub id: Uuid,
     /// Name of the sound
     pub name: String,
@@ -28,13 +30,12 @@ pub struct Model {
     /// Ordering
     pub order: u32,
     // Date time of creation
-    pub created_at: DateTimeUtc,
+    pub created_at: DateTime<Utc>,
 }
 
 /// Partial chunk of the sound model used for compute
 /// purposes, excludes fields used by the UI
-#[derive(Debug, DerivePartialModel, FromQueryResult, Clone, Serialize, Deserialize)]
-#[sea_orm(entity = "Entity")]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct PartialSoundModel {
     /// Unique ID for the sound
     pub id: Uuid,
@@ -43,31 +44,6 @@ pub struct PartialSoundModel {
     /// Volume of the sound 0-1
     pub volume: f32,
 }
-
-impl From<Model> for PartialSoundModel {
-    fn from(value: Model) -> Self {
-        Self {
-            id: value.id,
-            src: value.src,
-            volume: value.volume,
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {
-    /// Item can have many impact sounds
-    #[sea_orm(has_many = "super::items_sounds::Entity")]
-    ItemSounds,
-}
-
-impl Related<super::items_sounds::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::ItemSounds.def()
-    }
-}
-
-impl ActiveModelBehavior for ActiveModel {}
 
 #[derive(Debug, Deserialize)]
 pub struct CreateSound {
@@ -84,156 +60,207 @@ pub struct UpdateSound {
     pub order: Option<u32>,
 }
 
-impl Model {
+impl SoundModel {
+    fn columns() -> [SoundsColumn; 6] {
+        [
+            SoundsColumn::Id,
+            SoundsColumn::Name,
+            SoundsColumn::Src,
+            SoundsColumn::Volume,
+            SoundsColumn::Order,
+            SoundsColumn::CreatedAt,
+        ]
+    }
+
     /// Create a new sound
-    pub async fn create<C>(db: &C, create: CreateSound) -> anyhow::Result<Model>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
+    pub async fn create(db: &DbPool, create: CreateSound) -> anyhow::Result<SoundModel> {
         let id = Uuid::new_v4();
-        let active_model = ActiveModel {
-            id: Set(id),
-            name: Set(create.name),
-            src: Set(create.src),
-            volume: Set(create.volume),
-            order: Set(0),
-            created_at: Set(Utc::now()),
+        let model = SoundModel {
+            id,
+            name: create.name,
+            src: create.src,
+            volume: create.volume,
+            order: 0,
+            created_at: Utc::now(),
         };
 
-        Entity::insert(active_model)
-            .exec_without_returning(db)
-            .await?;
+        let (sql, values) = Query::insert()
+            .into_table(SoundsTable)
+            .columns(SoundModel::columns())
+            .values_panic([
+                model.id.into(),
+                model.name.clone().into(),
+                model.src.clone().into(),
+                model.volume.into(),
+                model.order.into(),
+                model.created_at.into(),
+            ])
+            .build_sqlx(SqliteQueryBuilder);
 
-        let model = Self::get_by_id(db, id)
-            .await?
-            .context("model was not inserted")?;
+        sqlx::query_with(&sql, values).execute(db).await?;
+
         Ok(model)
     }
 
     /// Find a specific sound by ID
-    pub async fn get_by_id<C>(db: &C, id: Uuid) -> DbResult<Option<Self>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        Entity::find_by_id(id).one(db).await
+    pub async fn get_by_id(db: &DbPool, id: Uuid) -> DbResult<Option<SoundModel>> {
+        let (sql, values) = Query::select()
+            .columns(SoundModel::columns())
+            .from(SoundsTable)
+            .and_where(Expr::col(SoundsColumn::Id).eq(id))
+            .build_sqlx(SqliteQueryBuilder);
+        let result = sqlx::query_as_with(&sql, values).fetch_optional(db).await?;
+        Ok(result)
     }
 
     /// Find a specific sound by ID
-    pub async fn get_by_id_partial<C>(db: &C, id: Uuid) -> DbResult<Option<PartialSoundModel>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        Entity::find_by_id(id).into_partial_model().one(db).await
+    pub async fn get_by_id_partial(db: &DbPool, id: Uuid) -> DbResult<Option<PartialSoundModel>> {
+        let (sql, values) = Query::select()
+            .columns([SoundsColumn::Id, SoundsColumn::Src, SoundsColumn::Volume])
+            .from(SoundsTable)
+            .and_where(Expr::col(SoundsColumn::Id).eq(id))
+            .build_sqlx(SqliteQueryBuilder);
+        let result = sqlx::query_as_with(&sql, values).fetch_optional(db).await?;
+        Ok(result)
     }
 
     /// Find sounds with IDs present in the provided list
-    pub async fn get_by_ids<C>(db: &C, ids: &[Uuid]) -> DbResult<Vec<Self>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        Entity::find()
-            .filter(Column::Id.is_in(ids.iter().copied()))
-            .all(db)
-            .await
+    pub async fn get_by_ids(db: &DbPool, ids: &[Uuid]) -> DbResult<Vec<SoundModel>> {
+        let (sql, values) = Query::select()
+            .columns(SoundModel::columns())
+            .from(SoundsTable)
+            .and_where(Expr::col(SoundsColumn::Id).is_in(ids.iter().copied()))
+            .build_sqlx(SqliteQueryBuilder);
+        let result = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
+        Ok(result)
     }
     /// Find sounds with IDs present in the provided list
-    pub async fn get_by_ids_partial<C>(db: &C, ids: &[Uuid]) -> DbResult<Vec<PartialSoundModel>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        Entity::find()
-            .filter(Column::Id.is_in(ids.iter().copied()))
-            .into_partial_model()
-            .all(db)
-            .await
+    pub async fn get_by_ids_partial(db: &DbPool, ids: &[Uuid]) -> DbResult<Vec<PartialSoundModel>> {
+        let (sql, values) = Query::select()
+            .columns([SoundsColumn::Id, SoundsColumn::Src, SoundsColumn::Volume])
+            .from(SoundsTable)
+            .and_where(Expr::col(SoundsColumn::Id).is_in(ids.iter().copied()))
+            .build_sqlx(SqliteQueryBuilder);
+        let result = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
+        Ok(result)
     }
 
     /// Find all sounds
-    pub async fn all<C>(db: &C) -> DbResult<Vec<Self>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        Entity::find()
-            .order_by_asc(Column::Order)
-            .order_by_desc(Column::CreatedAt)
-            .all(db)
-            .await
+    pub async fn all(db: &DbPool) -> DbResult<Vec<SoundModel>> {
+        let (sql, values) = Query::select()
+            .columns(SoundModel::columns())
+            .from(SoundsTable)
+            .order_by_columns([
+                (SoundsColumn::Order, Order::Asc),
+                (SoundsColumn::CreatedAt, Order::Desc),
+            ])
+            .build_sqlx(SqliteQueryBuilder);
+        let result = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
+        Ok(result)
     }
 
     /// Find all sounds with a matching name, optionally ignoring case
-    pub async fn get_by_names<C>(db: &C, names: &[String], ignore_case: bool) -> DbResult<Vec<Self>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        let mut select = Entity::find();
+    pub async fn get_by_names(
+        db: &DbPool,
+        names: &[String],
+        ignore_case: bool,
+    ) -> DbResult<Vec<SoundModel>> {
+        let mut select = Query::select();
+
+        select.columns(SoundModel::columns()).from(SoundsTable);
 
         if ignore_case {
-            select = select.filter(
+            select.and_where(
                 // Convert stored name to lower case
-                Expr::expr(Func::lower(Expr::col(Column::Name)))
+                Expr::expr(Func::lower(Expr::col(SoundsColumn::Name)))
                     // Compare with lowercase value
-                    .is_in(names.iter().map(|name| name.to_lowercase())),
-            )
+                    .is_in(names.iter().map(|value| value.to_lowercase())),
+            );
         } else {
-            select = select.filter(Column::Name.is_in(names))
-        }
+            select.and_where(Expr::col(SoundsColumn::Name).is_in(names));
+        };
 
-        select
-            .order_by_asc(Column::Order)
-            .order_by_desc(Column::CreatedAt)
-            .all(db)
-            .await
+        let (sql, values) = select.build_sqlx(SqliteQueryBuilder);
+        let sounds = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
+        Ok(sounds)
     }
 
     /// Update the current sound
-    pub async fn update<C>(self, db: &C, data: UpdateSound) -> DbResult<Self>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        let mut this = self.into_active_model();
+    pub async fn update(&mut self, db: &DbPool, data: UpdateSound) -> DbResult<()> {
+        let mut update = Query::update();
+        update.table(SoundsTable);
 
         if let Some(name) = data.name {
-            this.name = Set(name);
+            self.name = name.clone();
+            update.value(SoundsColumn::Name, Expr::value(name));
         }
 
         if let Some(src) = data.src {
-            this.src = Set(src);
+            self.src = src.clone();
+            update.value(SoundsColumn::Src, Expr::value(src));
         }
 
         if let Some(volume) = data.volume {
-            this.volume = Set(volume);
+            self.volume = volume;
+            update.value(SoundsColumn::Volume, Expr::value(volume));
         }
-        this.order = data.order.map(Set).unwrap_or(this.order);
 
-        let this = this.update(db).await?;
-        Ok(this)
-    }
+        if let Some(order) = data.order {
+            self.order = order;
+            update.value(SoundsColumn::Order, Expr::value(order));
+        }
 
-    pub async fn update_order<C>(db: &C, data: Vec<UpdateOrdering>) -> DbResult<()>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        data.chunks(1000)
-            .map(|order_chunk| -> BoxFuture<'_, DbResult<UpdateResult>> {
-                let mut case = CaseStatement::new()
-                    // Use the current column value when not specified
-                    .finally(Expr::col(Column::Order));
-
-                // Add case for all updated values
-                for order in order_chunk {
-                    case = case.case(Expr::col(Column::Id).eq(order.id), Expr::value(order.order));
-                }
-
-                Box::pin(
-                    Entity::update_many()
-                        .col_expr(Column::Order, case.into())
-                        .exec(db),
-                )
-            })
-            .collect::<FuturesUnordered<BoxFuture<'_, DbResult<UpdateResult>>>>()
-            .try_collect::<Vec<UpdateResult>>()
-            .await?;
+        let (sql, values) = update.build_sqlx(SqliteQueryBuilder);
+        sqlx::query_with(&sql, values).execute(db).await?;
 
         Ok(())
     }
+
+    pub async fn update_order(db: &DbPool, data: Vec<UpdateOrdering>) -> DbResult<()> {
+        for order_chunk in data.chunks(1000) {
+            let mut case = CaseStatement::new()
+                // Use the current column value when not specified
+                .finally(Expr::col(SoundsColumn::Order));
+
+            // Add case for all updated values
+            for order in order_chunk {
+                case = case.case(
+                    Expr::col(SoundsColumn::Id).eq(order.id),
+                    Expr::value(order.order),
+                );
+            }
+
+            let (sql, values) = Query::update()
+                .table(SoundsTable)
+                .value(SoundsColumn::Order, case)
+                .build_sqlx(SqliteQueryBuilder);
+
+            sqlx::query_with(&sql, values).execute(db).await?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn delete(self, db: &DbPool) -> DbResult<()> {
+        let (sql, values) = Query::delete()
+            .from_table(SoundsTable)
+            .and_where(Expr::col(SoundsColumn::Id).eq(self.id))
+            .build_sqlx(SqliteQueryBuilder);
+        sqlx::query_with(&sql, values).execute(db).await?;
+        Ok(())
+    }
+}
+
+#[derive(IdenStatic, Copy, Clone)]
+#[iden(rename = "sounds")]
+pub struct SoundsTable;
+
+#[derive(IdenStatic, Copy, Clone)]
+pub enum SoundsColumn {
+    Id,
+    Name,
+    Src,
+    Volume,
+    Order,
+    CreatedAt,
 }

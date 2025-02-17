@@ -1,12 +1,14 @@
 use super::websocket::WebsocketManagedTask;
 use crate::{
-    database::entity::{secrets::SecretModel, TWITCH_SECRET_KEY},
+    database::{
+        entity::{secrets::SecretsModel, TWITCH_SECRET_KEY},
+        DbPool,
+    },
     events::{AppEvent, AppEventSender},
 };
 use anyhow::{anyhow, Context};
 use futures::TryStreamExt;
 use log::{debug, error, info};
-use sea_orm::{DatabaseConnection, ModelTrait};
 use std::sync::Arc;
 use tokio::{
     join,
@@ -90,8 +92,8 @@ impl Twitch {
     }
 
     /// Attempts to authenticate with twitch using an existing access token (From the database)
-    pub async fn attempt_auth_stored(&self, db: DatabaseConnection) {
-        let secret = match SecretModel::get(&db, TWITCH_SECRET_KEY).await {
+    pub async fn attempt_auth_stored(&self, db: DbPool) {
+        let secret = match SecretsModel::get_by_key(&db, TWITCH_SECRET_KEY).await {
             Ok(Some(value)) => value,
             Ok(None) => {
                 debug!("not authenticated, skipping login");
@@ -104,7 +106,7 @@ impl Twitch {
         };
 
         let access_token = AccessToken::new(secret.value.to_string());
-        let scopes: Vec<Scope> = match serde_json::from_value(secret.metadata.0.clone()) {
+        let scopes: Vec<Scope> = match serde_json::from_value(secret.metadata.clone()) {
             Ok(value) => value,
             Err(_) => return,
         };
@@ -114,7 +116,8 @@ impl Twitch {
                 info!("logging out current access token, missing required scope");
 
                 // Clear outdated / invalid access token
-                _ = secret.delete(&db).await;
+                _ = SecretsModel::delete_by_key(&db, TWITCH_SECRET_KEY).await;
+
                 return;
             }
         }
@@ -123,7 +126,7 @@ impl Twitch {
             error!("stored access token is invalid: {}", err);
 
             // Clear outdated / invalid access token
-            _ = secret.delete(&db).await;
+            _ = SecretsModel::delete_by_key(&db, TWITCH_SECRET_KEY).await;
         }
     }
 

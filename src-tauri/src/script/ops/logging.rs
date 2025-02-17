@@ -10,8 +10,8 @@ use log::error;
 
 use crate::{
     database::entity::{
-        command_logs::{CommandLogsModel, CreateCommandLog},
-        event_logs::{CreateEventLog, EventLogsModel},
+        commands::{CommandModel, CreateCommandLog},
+        events::{CreateEventLog, EventModel},
         shared::LoggingLevelDb,
     },
     script::runtime::{RuntimeExecutionContext, ScriptRuntimeData},
@@ -57,7 +57,7 @@ pub fn op_log(
         tokio::spawn(async move {
             match ctx {
                 RuntimeExecutionContext::Event { event_id } => {
-                    if let Err(err) = EventLogsModel::create(
+                    if let Err(err) = EventModel::create_log(
                         &db,
                         CreateEventLog {
                             event_id,
@@ -72,7 +72,7 @@ pub fn op_log(
                     }
                 }
                 RuntimeExecutionContext::Command { command_id } => {
-                    if let Err(err) = CommandLogsModel::create(
+                    if let Err(err) = CommandModel::create_log(
                         &db,
                         CreateCommandLog {
                             command_id,

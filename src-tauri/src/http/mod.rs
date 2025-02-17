@@ -3,14 +3,13 @@
 //! Internal server for handling OAuth responses and serving the app overlay HTML
 
 use crate::{
-    database::entity::app_data::AppDataModel,
+    database::{entity::app_data::AppDataModel, DbPool},
     overlay::{OverlayDataStore, OverlayMessageReceiver},
     storage::Storage,
     twitch::manager::Twitch,
 };
 use anyhow::Context;
 use axum::Extension;
-use sea_orm::DatabaseConnection;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use tauri::AppHandle;
 use tower_http::cors::CorsLayer;
@@ -20,7 +19,7 @@ pub mod models;
 pub mod routes;
 
 pub async fn start_http_server(
-    db: DatabaseConnection,
+    db: DbPool,
     event_handle: OverlayMessageReceiver,
     app_handle: AppHandle,
     twitch: Twitch,

@@ -1,24 +1,27 @@
-use sea_orm::prelude::*;
-use sea_orm::{DeriveActiveEnum, EnumIter};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-
-pub type DbResult<T> = Result<T, DbErr>;
+use strum::{Display, EnumString};
+use uuid::Uuid;
 
 #[derive(
-    Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, EnumIter, DeriveActiveEnum,
+    Debug,
+    Default,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    EnumString,
+    Display,
+    sqlx::Type,
 )]
-#[sea_orm(rs_type = "String", db_type = "String(StringLen::None)")]
 pub enum MinimumRequireRole {
-    #[sea_orm(string_value = "None")]
     #[default]
     None,
-    #[sea_orm(string_value = "Follower")]
     Follower,
-    #[sea_orm(string_value = "Vip")]
     Vip,
-    #[sea_orm(string_value = "Mod")]
     Mod,
-    #[sea_orm(string_value = "Broadcaster")]
     Broadcaster,
 }
 
@@ -30,32 +33,28 @@ pub struct MinMax<T> {
     pub max: T,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, EnumIter, DeriveActiveEnum)]
-#[sea_orm(rs_type = "i32", db_type = "Integer")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[repr(i32)]
 pub enum LoggingLevelDb {
-    #[sea_orm(num_value = 0)]
-    Debug,
-    #[sea_orm(num_value = 1)]
-    Info,
-    #[sea_orm(num_value = 2)]
-    Warn,
-    #[sea_orm(num_value = 3)]
-    Error,
+    Debug = 0,
+    Info = 1,
+    Warn = 2,
+    Error = 3,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LogsQuery {
     pub level: Option<LoggingLevelDb>,
-    pub start_date: Option<DateTimeUtc>,
-    pub end_date: Option<DateTimeUtc>,
+    pub start_date: Option<DateTime<Utc>>,
+    pub end_date: Option<DateTime<Utc>>,
     pub offset: Option<u64>,
     pub limit: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExecutionsQuery {
-    pub start_date: Option<DateTimeUtc>,
-    pub end_date: Option<DateTimeUtc>,
+    pub start_date: Option<DateTime<Utc>>,
+    pub end_date: Option<DateTime<Utc>>,
     pub offset: Option<u64>,
     pub limit: Option<u64>,
 }

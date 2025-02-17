@@ -1,31 +1,20 @@
-use super::shared::DbResult;
-use anyhow::Context;
-use chrono::Utc;
-use sea_orm::{entity::prelude::*, sea_query::OnConflict, ActiveValue::Set, FromJsonQueryResult};
+use chrono::{DateTime, Utc};
+use sea_query::{Expr, IdenStatic, OnConflict, Query, SqliteQueryBuilder};
+use sea_query_binder::SqlxBinder;
 use serde::{Deserialize, Serialize};
+use sqlx::prelude::FromRow;
 
-// Type alias helpers for the database entity types
-pub type SecretModel = Model;
+use crate::database::{DbPool, DbResult};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "secrets")]
-pub struct Model {
-    #[sea_orm(primary_key)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, FromRow)]
+pub struct SecretsModel {
     pub key: String,
     pub value: String,
-    pub metadata: SecretMetadata,
+    #[sqlx(jsn)]
+    pub metadata: serde_json::Value,
     // Date time of creation
-    pub created_at: DateTimeUtc,
+    pub created_at: DateTime<Utc>,
 }
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, FromJsonQueryResult)]
-#[serde(transparent)]
-pub struct SecretMetadata(pub serde_json::Value);
-
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
-
-impl ActiveModelBehavior for ActiveModel {}
 
 #[derive(Debug, Deserialize)]
 pub struct SetSecret {
@@ -34,47 +23,86 @@ pub struct SetSecret {
     pub metadata: serde_json::Value,
 }
 
-impl Model {
+impl SecretsModel {
     /// Create a new sound
-    pub async fn set<C>(db: &C, create: SetSecret) -> anyhow::Result<Model>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        let active_model = ActiveModel {
-            key: Set(create.key.to_string()),
-            value: Set(create.value),
-            metadata: Set(SecretMetadata(create.metadata)),
-            created_at: Set(Utc::now()),
+    pub async fn set(db: &DbPool, create: SetSecret) -> anyhow::Result<SecretsModel> {
+        let model = SecretsModel {
+            key: create.key,
+            value: create.value,
+            metadata: create.metadata,
+            created_at: Utc::now(),
         };
 
-        Entity::insert(active_model)
+        let (sql, value) = Query::insert()
+            .into_table(SecretsTable)
+            .columns([
+                SecretsColumn::Key,
+                SecretsColumn::Value,
+                SecretsColumn::Metadata,
+                SecretsColumn::CreatedAt,
+            ])
+            .values_panic([
+                model.key.clone().into(),
+                model.value.clone().into(),
+                model.metadata.clone().into(),
+                model.created_at.into(),
+            ])
             .on_conflict(
-                OnConflict::column(Column::Key)
-                    .update_columns([Column::Value, Column::Metadata, Column::CreatedAt])
+                OnConflict::column(SecretsColumn::Key)
+                    .update_columns([
+                        SecretsColumn::Value,
+                        SecretsColumn::Metadata,
+                        SecretsColumn::CreatedAt,
+                    ])
                     .to_owned(),
             )
-            .exec_without_returning(db)
-            .await?;
+            .build_sqlx(SqliteQueryBuilder);
 
-        let model = Self::get(db, &create.key)
-            .await?
-            .context("model was not inserted")?;
+        sqlx::query_with(&sql, value).execute(db).await?;
 
         Ok(model)
     }
 
-    pub async fn get<C>(db: &C, key: &str) -> DbResult<Option<Self>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        Entity::find_by_id(key).one(db).await
+    /// Find a specific key value by key
+    pub async fn get_by_key(db: &DbPool, key: &str) -> DbResult<Option<Self>> {
+        let (sql, values) = Query::select()
+            .from(SecretsTable)
+            .columns([
+                SecretsColumn::Key,
+                SecretsColumn::Value,
+                SecretsColumn::Metadata,
+                SecretsColumn::CreatedAt,
+            ])
+            .and_where(Expr::col(SecretsColumn::Key).eq(key))
+            .build_sqlx(SqliteQueryBuilder);
+
+        let result = sqlx::query_as_with(&sql, values).fetch_optional(db).await?;
+        Ok(result)
     }
 
-    pub async fn delete<C>(db: &C, key: &str) -> DbResult<()>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        Entity::delete_by_id(key).exec(db).await?;
+    /// Find a specific key value by key
+    pub async fn delete_by_key(db: &DbPool, key: &str) -> DbResult<()> {
+        let (sql, values) = Query::delete()
+            .from_table(SecretsTable)
+            .and_where(Expr::col(SecretsColumn::Key).eq(key))
+            .build_sqlx(SqliteQueryBuilder);
+
+        sqlx::query_with(&sql, values).execute(db).await?;
         Ok(())
     }
+}
+
+#[derive(IdenStatic, Copy, Clone)]
+#[iden(rename = "secrets")]
+pub struct SecretsTable;
+
+#[derive(IdenStatic, Copy, Clone)]
+pub enum SecretsColumn {
+    /// Unique key the secret is stored under
+    Key,
+    /// Value of the secret
+    Value,
+    /// Additional metadata stored with the secret
+    Metadata,
+    CreatedAt,
 }

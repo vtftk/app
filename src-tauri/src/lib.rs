@@ -1,10 +1,9 @@
 use anyhow::Context;
 use commands::events::update_scheduler_events;
-use database::{clean_old_data, entity::app_data::AppDataModel};
+use database::{clean_old_data, entity::app_data::AppDataModel, DbPool};
 use events::{processing::process_events, scheduler::create_scheduler};
 use overlay::{create_overlay_channel, OverlayDataStore};
 use script::runtime::{create_script_executor, ScriptRuntimeData};
-use sea_orm::DatabaseConnection;
 use std::error::Error;
 use storage::Storage;
 use tauri::{
@@ -215,7 +214,7 @@ fn handle_duplicate_instance(app: &AppHandle, _args: Vec<String>, _cwd: String) 
 /// Handles app events, used for the minimize to tray event
 fn handle_app_event(app: &AppHandle, event: RunEvent) {
     if let tauri::RunEvent::ExitRequested { api, code, .. } = event {
-        let db = app.state::<DatabaseConnection>();
+        let db = app.state::<DbPool>();
         let main_config = block_on(AppDataModel::get_main_config(db.inner()));
         let minimize_to_tray = main_config.is_ok_and(|value| value.minimize_to_tray);
 

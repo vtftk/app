@@ -1,16 +1,9 @@
 pub mod app_data;
 pub mod chat_history;
-pub mod command_aliases;
-pub mod command_executions;
-pub mod command_logs;
 pub mod commands;
-pub mod event_executions;
-pub mod event_logs;
 pub mod events;
 pub mod items;
-pub mod items_sounds;
 pub mod key_value;
-pub mod links;
 pub mod model_data;
 pub mod secrets;
 pub mod shared;

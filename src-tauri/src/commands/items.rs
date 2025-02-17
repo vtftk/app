@@ -4,21 +4,23 @@
 
 use super::CmdResult;
 use crate::{
-    database::entity::{
-        items::{CreateItem, ItemModel, ItemWithSounds, UpdateItem},
-        items_sounds::SoundType,
-        shared::UpdateOrdering,
+    database::{
+        entity::{
+            items::{CreateItem, ItemModel, ItemWithSounds, UpdateItem},
+            shared::UpdateOrdering,
+            sounds::SoundType,
+        },
+        DbPool,
     },
     storage::Storage,
 };
 use anyhow::Context;
-use sea_orm::{DatabaseConnection, ModelTrait};
 use tauri::State;
 use uuid::Uuid;
 
 /// Get all items
 #[tauri::command]
-pub async fn get_items(db: State<'_, DatabaseConnection>) -> CmdResult<Vec<ItemModel>> {
+pub async fn get_items(db: State<'_, DbPool>) -> CmdResult<Vec<ItemModel>> {
     let db = db.inner();
     let items = ItemModel::all(db).await?;
     Ok(items)
@@ -29,7 +31,7 @@ pub async fn get_items(db: State<'_, DatabaseConnection>) -> CmdResult<Vec<ItemM
 #[tauri::command]
 pub async fn get_item_by_id(
     item_id: Uuid,
-    db: State<'_, DatabaseConnection>,
+    db: State<'_, DbPool>,
 ) -> CmdResult<Option<ItemWithSounds>> {
     let db = db.inner();
     let item = match ItemModel::get_by_id(db, item_id).await? {
@@ -44,10 +46,7 @@ pub async fn get_item_by_id(
 
 /// Create a new item
 #[tauri::command]
-pub async fn create_item(
-    create: CreateItem,
-    db: State<'_, DatabaseConnection>,
-) -> CmdResult<ItemWithSounds> {
+pub async fn create_item(create: CreateItem, db: State<'_, DbPool>) -> CmdResult<ItemWithSounds> {
     let db = db.inner();
     let item = ItemModel::create(db, create).await?;
     let item_with_sounds = item.with_sounds(db).await?;
@@ -60,17 +59,17 @@ pub async fn create_item(
 pub async fn update_item(
     item_id: Uuid,
     update: UpdateItem,
-    db: State<'_, DatabaseConnection>,
+    db: State<'_, DbPool>,
     storage: State<'_, Storage>,
 ) -> CmdResult<ItemWithSounds> {
     let db = db.inner();
-    let item = ItemModel::get_by_id(db, item_id)
+    let mut item = ItemModel::get_by_id(db, item_id)
         .await?
         .context("item not found")?;
 
     let original_item_url = item.config.image.src.clone();
 
-    let item = item.update(db, update).await?;
+    item.update(db, update).await?;
 
     // Delete previous image file when changed
     if item.config.image.src != original_item_url {
@@ -85,7 +84,7 @@ pub async fn update_item(
 #[tauri::command]
 pub async fn update_item_orderings(
     update: Vec<UpdateOrdering>,
-    db: State<'_, DatabaseConnection>,
+    db: State<'_, DbPool>,
 ) -> CmdResult<()> {
     let db = db.inner();
     ItemModel::update_order(db, update).await?;
@@ -98,7 +97,7 @@ pub async fn update_item_orderings(
 pub async fn append_item_impact_sounds(
     item_id: Uuid,
     sounds: Vec<Uuid>,
-    db: State<'_, DatabaseConnection>,
+    db: State<'_, DbPool>,
 ) -> CmdResult<()> {
     let db = db.inner();
     let item = ItemModel::get_by_id(db, item_id)
@@ -112,7 +111,7 @@ pub async fn append_item_impact_sounds(
 #[tauri::command]
 pub async fn delete_item(
     item_id: Uuid,
-    db: State<'_, DatabaseConnection>,
+    db: State<'_, DbPool>,
     storage: State<'_, Storage>,
 ) -> CmdResult<()> {
     let db = db.inner();

@@ -1,7 +1,10 @@
 use crate::{
-    database::entity::{
-        secrets::{SecretModel, SetSecret},
-        TWITCH_SECRET_KEY,
+    database::{
+        entity::{
+            secrets::{SecretsModel, SetSecret},
+            TWITCH_SECRET_KEY,
+        },
+        DbPool,
     },
     http::error::HttpResult,
     twitch::manager::Twitch,
@@ -9,7 +12,6 @@ use crate::{
 use anyhow::Context;
 use axum::{response::IntoResponse, Extension, Json};
 use reqwest::header::CONTENT_TYPE;
-use sea_orm::DatabaseConnection;
 use serde::Deserialize;
 use twitch_api::{helix::Scope, twitch_oauth2::AccessToken};
 
@@ -37,7 +39,7 @@ pub struct OAuthComplete {
 /// Handles the completion of OAuth logging into the twitch account storing
 /// the access token and authorized scopes
 pub async fn handle_oauth_complete(
-    Extension(db): Extension<DatabaseConnection>,
+    Extension(db): Extension<DbPool>,
     Extension(twitch): Extension<Twitch>,
     Json(req): Json<OAuthComplete>,
 ) -> HttpResult<()> {
@@ -49,7 +51,7 @@ pub async fn handle_oauth_complete(
     twitch.set_authenticated(token).await;
 
     // Set new access token
-    SecretModel::set(
+    SecretsModel::set(
         &db,
         SetSecret {
             key: TWITCH_SECRET_KEY.to_string(),

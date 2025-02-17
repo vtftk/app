@@ -1,50 +1,34 @@
-//! # Key Value
-//!
-//! Key value store in the database
-
-use anyhow::Context;
-use sea_orm::{entity::prelude::*, sea_query::OnConflict, ActiveValue::Set};
+use sea_query::{Expr, IdenStatic, OnConflict, Query, SqliteQueryBuilder};
+use sea_query_binder::SqlxBinder;
 use serde::{Deserialize, Serialize};
+use sqlx::prelude::FromRow;
+use strum::{Display, EnumString};
 
-use super::shared::DbResult;
+use crate::database::{DbPool, DbResult};
 
-// Type alias helpers for the database entity types
-pub type KeyValueModel = Model;
-
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "key_value")]
-pub struct Model {
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, FromRow)]
+pub struct KeyValueModel {
     /// Key for the key value pair
-    #[sea_orm(primary_key)]
     pub key: String,
     #[serde(rename = "type")]
-    #[sea_orm(column_name = "type")]
     pub ty: KeyValueType,
     pub value: String,
 }
 
 /// Key value type
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, EnumIter, DeriveActiveEnum)]
-#[sea_orm(rs_type = "String", db_type = "String(StringLen::None)")]
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, EnumString, Display, sqlx::Type,
+)]
 pub enum KeyValueType {
     /// Plain text is stored
-    #[sea_orm(string_value = "Text")]
     Text,
     /// Number is stored as plain text
-    #[sea_orm(string_value = "Number")]
     Number,
     /// Object is stored as JSON
-    #[sea_orm(string_value = "Object")]
     Object,
     /// Array is stored as JSON
-    #[sea_orm(string_value = "Array")]
     Array,
 }
-
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
-
-impl ActiveModelBehavior for ActiveModel {}
 
 #[derive(Debug, Deserialize)]
 pub struct CreateKeyValue {
@@ -54,39 +38,74 @@ pub struct CreateKeyValue {
     pub ty: KeyValueType,
 }
 
-impl Model {
+impl KeyValueModel {
     /// Create a new sound
-    pub async fn create<C>(db: &C, create: CreateKeyValue) -> anyhow::Result<Model>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        let active_model = ActiveModel {
-            key: Set(create.key.to_string()),
-            value: Set(create.value),
-            ty: Set(create.ty),
+    pub async fn create(db: &DbPool, create: CreateKeyValue) -> anyhow::Result<KeyValueModel> {
+        let model = KeyValueModel {
+            key: create.key.to_string(),
+            value: create.value.to_string(),
+            ty: create.ty,
         };
 
-        Entity::insert(active_model)
+        let (sql, value) = Query::insert()
+            .into_table(KeyValueTable)
+            .columns([
+                KeyValueColumn::Key,
+                KeyValueColumn::Value,
+                KeyValueColumn::Type,
+            ])
+            .values_panic([
+                create.key.into(),
+                create.value.into(),
+                create.ty.to_string().into(),
+            ])
             .on_conflict(
-                OnConflict::column(Column::Key)
-                    .update_column(Column::Value)
-                    .update_column(Column::Ty)
+                OnConflict::column(KeyValueColumn::Key)
+                    .update_columns([KeyValueColumn::Value, KeyValueColumn::Type])
                     .to_owned(),
             )
-            .exec_without_returning(db)
-            .await?;
+            .build_sqlx(SqliteQueryBuilder);
 
-        let model = Self::get_by_key(db, &create.key)
-            .await?
-            .context("model was not inserted")?;
+        sqlx::query_with(&sql, value).execute(db).await?;
+
         Ok(model)
     }
 
     /// Find a specific key value by key
-    pub async fn get_by_key<C>(db: &C, key: &str) -> DbResult<Option<Self>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        Entity::find_by_id(key).one(db).await
+    pub async fn get_by_key(db: &DbPool, key: &str) -> DbResult<Option<Self>> {
+        let (sql, values) = Query::select()
+            .from(KeyValueTable)
+            .columns([
+                KeyValueColumn::Key,
+                KeyValueColumn::Value,
+                KeyValueColumn::Type,
+            ])
+            .and_where(Expr::col(KeyValueColumn::Key).eq(key))
+            .build_sqlx(SqliteQueryBuilder);
+
+        let result = sqlx::query_as_with(&sql, values).fetch_optional(db).await?;
+        Ok(result)
     }
+
+    /// Find a specific key value by key
+    pub async fn delete_by_key(db: &DbPool, key: &str) -> DbResult<()> {
+        let (sql, values) = Query::delete()
+            .from_table(KeyValueTable)
+            .and_where(Expr::col(KeyValueColumn::Key).eq(key))
+            .build_sqlx(SqliteQueryBuilder);
+
+        sqlx::query_with(&sql, values).execute(db).await?;
+        Ok(())
+    }
+}
+
+#[derive(IdenStatic, Copy, Clone)]
+#[iden(rename = "key_value")]
+pub struct KeyValueTable;
+
+#[derive(IdenStatic, Copy, Clone)]
+pub enum KeyValueColumn {
+    Key,
+    Value,
+    Type,
 }

@@ -3,7 +3,6 @@ use crate::{
     script::runtime::ScriptRuntimeData,
 };
 use deno_core::*;
-use sea_orm::ModelTrait;
 use std::{cell::RefCell, rc::Rc};
 
 #[op2(async)]
@@ -35,9 +34,7 @@ pub async fn op_kv_remove(
         data.db.clone()
     };
 
-    if let Some(key_value) = KeyValueModel::get_by_key(&db, &key).await? {
-        key_value.delete(&db).await?;
-    }
+    KeyValueModel::delete_by_key(&db, &key).await?;
 
     Ok(())
 }

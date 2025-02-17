@@ -1,11 +1,11 @@
 use crate::commands::CmdResult;
 use crate::database::entity::app_data::AppDataModel;
-use crate::database::entity::secrets::SecretModel;
+use crate::database::entity::secrets::SecretsModel;
 use crate::database::entity::TWITCH_SECRET_KEY;
+use crate::database::DbPool;
 use crate::twitch::manager::Twitch;
 use anyhow::Context;
 use reqwest::Url;
-use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tauri::State;
 use twitch_api::helix::points::CustomReward;
@@ -33,7 +33,7 @@ pub async fn refresh_redeems_list(twitch: State<'_, Twitch>) -> CmdResult<()> {
 #[tauri::command]
 pub async fn get_twitch_oauth_uri(
     twitch: State<'_, Twitch>,
-    db: tauri::State<'_, DatabaseConnection>,
+    db: tauri::State<'_, DbPool>,
 ) -> CmdResult<String> {
     let http_port = AppDataModel::get_http_port(db.inner()).await?;
 
@@ -52,10 +52,10 @@ pub async fn is_authenticated(twitch: tauri::State<'_, Twitch>) -> CmdResult<boo
 #[tauri::command]
 pub async fn logout(
     twitch: tauri::State<'_, Twitch>,
-    db: tauri::State<'_, DatabaseConnection>,
+    db: tauri::State<'_, DbPool>,
 ) -> CmdResult<()> {
     twitch.reset().await;
-    SecretModel::delete(db.inner(), TWITCH_SECRET_KEY).await?;
+    SecretsModel::delete_by_key(db.inner(), TWITCH_SECRET_KEY).await?;
 
     Ok(())
 }

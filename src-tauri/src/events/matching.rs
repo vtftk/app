@@ -3,7 +3,6 @@ use std::str::FromStr;
 use anyhow::{bail, Context};
 use chrono::Utc;
 use log::{debug, error};
-use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Deserializer, Serialize};
 use tokio::join;
 use twitch_api::{
@@ -13,10 +12,13 @@ use twitch_api::{
 use uuid::Uuid;
 
 use crate::{
-    database::entity::{
-        chat_history::{ChatHistoryModel, CreateChatHistory},
-        commands::CommandModel,
-        events::{EventModel, EventTrigger, EventTriggerType},
+    database::{
+        entity::{
+            chat_history::{ChatHistoryModel, CreateChatHistory},
+            commands::CommandModel,
+            events::{EventModel, EventTrigger, EventTriggerType},
+        },
+        DbPool,
     },
     events::{
         TwitchEventAdBreakBegin, TwitchEventChatMsg, TwitchEventCheerBits, TwitchEventFollow,
@@ -180,7 +182,7 @@ pub fn deserialize_ignore_any<'de, D: Deserializer<'de>, T: Default>(
 }
 
 pub async fn match_redeem_event(
-    db: &DatabaseConnection,
+    db: &DbPool,
     event: TwitchEventRedeem,
 ) -> anyhow::Result<EventMatchingData> {
     let events = EventModel::get_by_trigger_type(db, EventTriggerType::Redeem).await;
@@ -229,7 +231,7 @@ pub async fn match_redeem_event(
 }
 
 pub async fn match_cheer_bits_event(
-    db: &DatabaseConnection,
+    db: &DbPool,
     event: TwitchEventCheerBits,
 ) -> anyhow::Result<EventMatchingData> {
     let bits = event.bits;
@@ -278,7 +280,7 @@ pub async fn match_cheer_bits_event(
 }
 
 pub async fn match_follow_event(
-    db: &DatabaseConnection,
+    db: &DbPool,
     event: TwitchEventFollow,
 ) -> anyhow::Result<EventMatchingData> {
     let events = EventModel::get_by_trigger_type(db, EventTriggerType::Follow).await;
@@ -307,7 +309,7 @@ pub async fn match_follow_event(
 }
 
 pub async fn match_subscription_event(
-    db: &DatabaseConnection,
+    db: &DbPool,
     event: TwitchEventSub,
 ) -> anyhow::Result<EventMatchingData> {
     let events = EventModel::get_by_trigger_type(db, EventTriggerType::Subscription).await;
@@ -339,7 +341,7 @@ pub async fn match_subscription_event(
 }
 
 pub async fn match_gifted_subscription_event(
-    db: &DatabaseConnection,
+    db: &DbPool,
     event: TwitchEventGiftSub,
 ) -> anyhow::Result<EventMatchingData> {
     let events = EventModel::get_by_trigger_type(db, EventTriggerType::GiftedSubscription).await;
@@ -379,7 +381,7 @@ pub async fn match_gifted_subscription_event(
 }
 
 pub async fn match_re_subscription_event(
-    db: &DatabaseConnection,
+    db: &DbPool,
     event: TwitchEventReSub,
 ) -> anyhow::Result<EventMatchingData> {
     let events = EventModel::get_by_trigger_type(db, EventTriggerType::Subscription).await;
@@ -413,10 +415,7 @@ pub async fn match_re_subscription_event(
     })
 }
 
-async fn store_chat_event(
-    db: &DatabaseConnection,
-    event: &TwitchEventChatMsg,
-) -> anyhow::Result<()> {
+async fn store_chat_event(db: &DbPool, event: &TwitchEventChatMsg) -> anyhow::Result<()> {
     let id = Uuid::from_str(event.message_id.as_str()).context("invalid message ID")?;
 
     ChatHistoryModel::create(
@@ -435,7 +434,7 @@ async fn store_chat_event(
 }
 
 pub async fn match_chat_event(
-    db: &DatabaseConnection,
+    db: &DbPool,
     event: TwitchEventChatMsg,
 ) -> anyhow::Result<EventMatchingData> {
     if let Err(err) = store_chat_event(db, &event).await {
@@ -533,7 +532,7 @@ pub async fn match_chat_event(
 }
 
 pub async fn match_raid_event(
-    db: &DatabaseConnection,
+    db: &DbPool,
     event: TwitchEventRaid,
 ) -> anyhow::Result<EventMatchingData> {
     let events = EventModel::get_by_trigger_type(db, EventTriggerType::Raid).await;
@@ -575,7 +574,7 @@ pub async fn match_raid_event(
 }
 
 pub async fn match_ad_break_event(
-    db: &DatabaseConnection,
+    db: &DbPool,
     event: TwitchEventAdBreakBegin,
 ) -> anyhow::Result<EventMatchingData> {
     let events = EventModel::get_by_trigger_type(db, EventTriggerType::AdBreakBegin).await;
@@ -603,7 +602,7 @@ pub async fn match_ad_break_event(
 }
 
 pub async fn match_timer_complete_event(
-    db: &DatabaseConnection,
+    db: &DbPool,
     twitch: &Twitch,
     event: TimerCompleted,
 ) -> anyhow::Result<EventMatchingData> {
@@ -616,7 +615,7 @@ pub async fn match_timer_complete_event(
     let min_chat_messages = match &event.trigger {
         EventTrigger::Timer {
             min_chat_messages, ..
-        } => *min_chat_messages as u64,
+        } => *min_chat_messages,
         _ => {
             bail!("attempted to execute timer event that was not a timer event");
         }
@@ -650,7 +649,7 @@ pub async fn match_timer_complete_event(
 }
 
 pub async fn match_shoutout_receive_event(
-    db: &DatabaseConnection,
+    db: &DbPool,
     event: TwitchEventShoutoutReceive,
 ) -> anyhow::Result<EventMatchingData> {
     let events = EventModel::get_by_trigger_type(db, EventTriggerType::ShoutoutReceive).await;

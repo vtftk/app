@@ -1,28 +1,26 @@
-use super::{
-    command_aliases::{CommandAliasActiveModel, CommandAliasColumn, CommandWithAliases},
-    command_executions::{CommandExecutionColumn, CommandExecutionModel},
-    command_logs::{CommandLogsColumn, CommandLogsModel},
-    shared::{DbResult, ExecutionsQuery, LogsQuery, MinimumRequireRole, UpdateOrdering},
+use chrono::{DateTime, Utc};
+use sea_query::{
+    Alias, CaseStatement, Condition, Expr, Func, IdenStatic, JoinType, Order, Query,
+    SqliteQueryBuilder,
 };
-use anyhow::Context;
-use chrono::Utc;
-use futures::{future::BoxFuture, stream::FuturesUnordered, TryStreamExt};
-use sea_orm::{
-    entity::prelude::*,
-    sea_query::{CaseStatement, Func},
-    ActiveValue::Set,
-    Condition, FromJsonQueryResult, IntoActiveModel, QueryOrder, QuerySelect, UpdateResult,
-};
+use sea_query_binder::SqlxBinder;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+use sqlx::prelude::FromRow;
+use uuid::Uuid;
 
-// Type alias helpers for the database entity types
-pub type CommandModel = Model;
+use crate::{
+    database::{entity::events::EventExecutionsColumn, DbPool, DbResult},
+    events::TwitchEventUser,
+};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "commands")]
-pub struct Model {
+use super::shared::{
+    ExecutionsQuery, LoggingLevelDb, LogsQuery, MinimumRequireRole, UpdateOrdering,
+};
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, FromRow)]
+pub struct CommandModel {
     /// Unique ID for the sound
-    #[sea_orm(primary_key)]
     pub id: Uuid,
     /// Whether the command is enabled and runnable
     pub enabled: bool,
@@ -31,25 +29,97 @@ pub struct Model {
     /// The command to trigger when entered
     pub command: String,
     /// The outcome of the command
+    #[sqlx(json)]
     pub outcome: CommandOutcome,
     /// Cooldown between each trigger of the command
+    #[sqlx(json)]
     pub cooldown: CommandCooldown,
     /// Minimum required role to trigger the command
     pub require_role: MinimumRequireRole,
     /// Ordering
     pub order: u32,
     // Date time of creation
-    pub created_at: DateTimeUtc,
+    pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, FromJsonQueryResult)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, FromRow)]
+pub struct CommandAliasModel {
+    /// Unique ID of the log
+    pub id: Uuid,
+    /// ID of the command
+    pub command_id: Uuid,
+    /// The alias
+    pub alias: String,
+    /// Order within the command aliases list
+    pub order: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CommandWithAliases {
+    #[serde(flatten)]
+    pub command: CommandModel,
+    pub aliases: Vec<String>,
+}
+
+#[derive(Debug)]
+pub struct CreateCommandLog {
+    pub command_id: Uuid,
+    pub level: LoggingLevelDb,
+    pub message: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, FromRow)]
+pub struct CommandLogsModel {
+    /// Unique ID of the log
+    pub id: Uuid,
+    /// ID of the command
+    pub command_id: Uuid,
+    /// Level of the log
+    pub level: LoggingLevelDb,
+    /// Logging message
+    pub message: String,
+    /// Creation time of the event
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug)]
+pub struct CreateCommandExecution {
+    pub command_id: Uuid,
+    pub metadata: CommandExecutionMetadata,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, FromRow)]
+pub struct CommandExecutionModel {
+    /// Unique ID for the event
+    pub id: Uuid,
+    pub command_id: Uuid,
+    #[sqlx(json)]
+    pub metadata: CommandExecutionMetadata,
+    pub created_at: DateTime<Utc>,
+}
+
+#[serde_as]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CommandExecutionMetadata {
+    /// User who triggered the event
+    pub user: Option<TwitchEventUser>,
+
+    /// Catchall for any other metadata
+    #[serde(flatten)]
+    #[serde_as(as = "serde_with::Map<_, _>")]
+    pub data: Vec<(String, serde_json::Value)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum CommandOutcome {
     Template { message: String },
     Script { script: String },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, FromJsonQueryResult)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct CommandCooldown {
     pub enabled: bool,
@@ -66,39 +136,6 @@ impl Default for CommandCooldown {
         }
     }
 }
-
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {
-    /// Command can have many executions
-    #[sea_orm(has_many = "super::command_executions::Entity")]
-    Executions,
-    /// Command can have many logs
-    #[sea_orm(has_many = "super::command_logs::Entity")]
-    Logs,
-    /// Command can have many aliases
-    #[sea_orm(has_many = "super::command_aliases::Entity")]
-    Aliases,
-}
-
-impl Related<super::command_executions::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Executions.def()
-    }
-}
-
-impl Related<super::command_logs::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Logs.def()
-    }
-}
-
-impl Related<super::command_aliases::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Aliases.def()
-    }
-}
-
-impl ActiveModelBehavior for ActiveModel {}
 
 #[derive(Debug, Deserialize)]
 pub struct CreateCommand {
@@ -123,32 +160,56 @@ pub struct UpdateCommand {
     pub aliases: Option<Vec<String>>,
 }
 
-impl Model {
+impl CommandModel {
+    pub fn columns() -> [CommandsColumn; 9] {
+        [
+            CommandsColumn::Id,
+            CommandsColumn::Enabled,
+            CommandsColumn::Name,
+            CommandsColumn::Command,
+            CommandsColumn::Outcome,
+            CommandsColumn::Cooldown,
+            CommandsColumn::RequireRole,
+            CommandsColumn::Order,
+            CommandsColumn::CreatedAt,
+        ]
+    }
+
     /// Create a new sound
-    pub async fn create<C>(db: &C, create: CreateCommand) -> anyhow::Result<Model>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
+    pub async fn create(db: &DbPool, create: CreateCommand) -> anyhow::Result<CommandModel> {
         let id = Uuid::new_v4();
-        let active_model = ActiveModel {
-            id: Set(id),
-            enabled: Set(create.enabled),
-            name: Set(create.name),
-            command: Set(create.command),
-            outcome: Set(create.outcome),
-            cooldown: Set(create.cooldown),
-            require_role: Set(create.require_role),
-            order: Set(0),
-            created_at: Set(Utc::now()),
+        let model = CommandModel {
+            id,
+            enabled: create.enabled,
+            name: create.name,
+            command: create.command,
+            outcome: create.outcome,
+            cooldown: create.cooldown,
+            require_role: create.require_role,
+            order: 0,
+            created_at: Utc::now(),
         };
 
-        Entity::insert(active_model)
-            .exec_without_returning(db)
-            .await?;
+        let cooldown_value = serde_json::to_value(&model.cooldown)?;
+        let outcome_value = serde_json::to_value(&model.outcome)?;
 
-        let model = Self::get_by_id(db, id)
-            .await?
-            .context("model was not inserted")?;
+        let (sql, values) = Query::insert()
+            .into_table(CommandsTable)
+            .columns(CommandModel::columns())
+            .values_panic([
+                model.id.into(),
+                model.enabled.into(),
+                model.name.clone().into(),
+                model.command.to_string().into(),
+                outcome_value.into(),
+                cooldown_value.into(),
+                model.require_role.to_string().into(),
+                model.order.into(),
+                model.created_at.into(),
+            ])
+            .build_sqlx(SqliteQueryBuilder);
+
+        sqlx::query_with(&sql, values).execute(db).await?;
 
         model.set_aliases(db, create.aliases).await?;
 
@@ -157,222 +218,493 @@ impl Model {
 
     /// Find commands by the actual command trigger word
     /// and only commands that are enabled
-    pub async fn get_by_command<C>(db: &C, command: &str) -> DbResult<Vec<Model>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        Entity::find()
-            .left_join(super::command_aliases::Entity)
-            .filter(
+    pub async fn get_by_command(db: &DbPool, command: &str) -> DbResult<Vec<CommandModel>> {
+        let (sql, values) = Query::select()
+            .from(CommandsTable)
+            .columns(CommandModel::columns())
+            .join_as(
+                JoinType::LeftJoin,
+                CommandAliasTable,
+                Alias::new("alias"),
+                Expr::col((CommandsTable, CommandsColumn::Id))
+                    .equals((CommandAliasTable, CommandAliasColumn::CommandId)),
+            )
+            .cond_where(
                 Condition::any()
-                    .add(Expr::expr(Func::lower(Expr::col(Column::Command))).eq(command))
+                    .add(Expr::expr(Func::lower(Expr::col(CommandsColumn::Command))).eq(command))
                     .add(Expr::expr(Func::lower(Expr::col(CommandAliasColumn::Alias))).eq(command)),
             )
-            .filter(Column::Enabled.eq(true))
-            .group_by(Column::Id)
-            .all(db)
-            .await
+            .and_where(Expr::col(CommandsColumn::Enabled).eq(true))
+            .group_by_col(CommandsColumn::Id)
+            .build_sqlx(SqliteQueryBuilder);
+
+        let results = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
+        Ok(results)
     }
 
     /// Find the most recent execution of this command
-    pub async fn last_execution<C>(
+    pub async fn last_execution(
         &self,
-        db: &C,
+        db: &DbPool,
         offset: u64,
-    ) -> DbResult<Option<CommandExecutionModel>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        self.find_related(super::command_executions::Entity)
-            .order_by_desc(CommandExecutionColumn::CreatedAt)
+    ) -> DbResult<Option<CommandExecutionModel>> {
+        let (sql, values) = Query::select()
+            .from(CommandExecutionsTable)
+            .columns([
+                CommandExecutionsColumn::Id,
+                CommandExecutionsColumn::CommandId,
+                CommandExecutionsColumn::Metadata,
+                CommandExecutionsColumn::CreatedAt,
+            ])
+            .and_where(Expr::col(CommandExecutionsColumn::CommandId).eq(self.id))
             .offset(offset)
-            .one(db)
-            .await
+            .order_by(CommandExecutionsColumn::CreatedAt, Order::Desc)
+            .build_sqlx(SqliteQueryBuilder);
+
+        let value: Option<CommandExecutionModel> =
+            sqlx::query_as_with(&sql, values).fetch_optional(db).await?;
+        Ok(value)
     }
 
-    /// Find a specific sound by ID
-    pub async fn get_by_id<C>(db: &C, id: Uuid) -> DbResult<Option<Self>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        Entity::find_by_id(id).one(db).await
+    pub async fn delete(self, db: &DbPool) -> DbResult<()> {
+        let (sql, values) = Query::delete()
+            .from_table(CommandsTable)
+            .and_where(Expr::col(CommandsColumn::Id).eq(self.id))
+            .build_sqlx(SqliteQueryBuilder);
+        sqlx::query_with(&sql, values).execute(db).await?;
+        Ok(())
     }
-    /// Find a specific sound by ID
-    pub async fn get_by_id_with_aliases<C>(db: &C, id: Uuid) -> DbResult<Option<CommandWithAliases>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        let command = match Entity::find_by_id(id).one(db).await? {
+
+    pub async fn get_by_id(db: &DbPool, id: Uuid) -> DbResult<Option<Self>> {
+        let (sql, values) = Query::select()
+            .columns(CommandModel::columns())
+            .from(CommandsTable)
+            .and_where(Expr::col(CommandsColumn::Id).eq(id))
+            .build_sqlx(SqliteQueryBuilder);
+        let result = sqlx::query_as_with(&sql, values).fetch_optional(db).await?;
+        Ok(result)
+    }
+
+    pub async fn get_by_id_with_aliases(
+        db: &DbPool,
+        id: Uuid,
+    ) -> DbResult<Option<CommandWithAliases>> {
+        let command = match Self::get_by_id(db, id).await? {
             Some(value) => value,
             None => return Ok(None),
         };
-
         let aliases = command.get_aliases(db).await?;
 
         Ok(Some(CommandWithAliases { command, aliases }))
     }
 
-    /// Find all sounds
-    pub async fn all<C>(db: &C) -> DbResult<Vec<Self>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        Entity::find()
-            .order_by_asc(Column::Order)
-            .order_by_desc(Column::CreatedAt)
-            .all(db)
-            .await
+    pub async fn all(db: &DbPool) -> DbResult<Vec<Self>> {
+        let (sql, values) = Query::select()
+            .columns(CommandModel::columns())
+            .from(CommandsTable)
+            .order_by_columns([
+                (CommandsColumn::Order, Order::Asc),
+                (CommandsColumn::CreatedAt, Order::Desc),
+            ])
+            .build_sqlx(SqliteQueryBuilder);
+        let result = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
+        Ok(result)
     }
 
-    /// Update the current sound
-    pub async fn update<C>(self, db: &C, data: UpdateCommand) -> DbResult<Self>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        let mut this = self.into_active_model();
+    pub async fn update(&mut self, db: &DbPool, data: UpdateCommand) -> anyhow::Result<()> {
+        let mut update = Query::update();
+        update.table(CommandsTable);
 
-        this.enabled = data.enabled.map(Set).unwrap_or(this.enabled);
-        this.name = data.name.map(Set).unwrap_or(this.name);
-        this.command = data.command.map(Set).unwrap_or(this.command);
-        this.outcome = data.outcome.map(Set).unwrap_or(this.outcome);
-        this.cooldown = data.cooldown.map(Set).unwrap_or(this.cooldown);
-        this.require_role = data.require_role.map(Set).unwrap_or(this.require_role);
-        this.order = data.order.map(Set).unwrap_or(this.order);
+        if let Some(enabled) = data.enabled {
+            self.enabled = enabled;
+            update.value(CommandsColumn::Enabled, Expr::value(enabled));
+        }
 
-        let this = this.update(db).await?;
+        if let Some(name) = data.name {
+            self.name = name.clone();
+            update.value(CommandsColumn::Name, Expr::value(name));
+        }
+
+        if let Some(command) = data.command {
+            self.command = command.clone();
+            update.value(CommandsColumn::Command, Expr::value(command));
+        }
+
+        if let Some(outcome) = data.outcome {
+            self.outcome = outcome;
+
+            let outcome_value = serde_json::to_value(&self.outcome)?;
+            update.value(CommandsColumn::Outcome, Expr::value(outcome_value));
+        }
+
+        if let Some(cooldown) = data.cooldown {
+            self.cooldown = cooldown;
+
+            let cooldown_value = serde_json::to_value(&self.cooldown)?;
+            update.value(CommandsColumn::Cooldown, Expr::value(cooldown_value));
+        }
+
+        if let Some(require_role) = data.require_role {
+            self.require_role = require_role;
+            update.value(
+                CommandsColumn::RequireRole,
+                Expr::value(require_role.to_string()),
+            );
+        }
+
+        if let Some(order) = data.order {
+            self.order = order;
+            update.value(CommandsColumn::Order, Expr::value(order));
+        }
 
         if let Some(aliases) = data.aliases {
-            this.set_aliases(db, aliases).await?;
+            self.set_aliases(db, aliases).await?;
         }
 
-        Ok(this)
+        Ok(())
     }
 
-    pub async fn get_logs<C>(&self, db: &C, query: LogsQuery) -> DbResult<Vec<CommandLogsModel>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        let mut select = self.find_related(super::command_logs::Entity);
+    pub async fn get_logs(&self, db: &DbPool, query: LogsQuery) -> DbResult<Vec<CommandLogsModel>> {
+        let mut select = Query::select();
+        select
+            .from(CommandLogsTable)
+            .columns([
+                CommandLogsColumn::Id,
+                CommandLogsColumn::CommandId,
+                CommandLogsColumn::Level,
+                CommandLogsColumn::Message,
+                CommandLogsColumn::CreatedAt,
+            ])
+            .and_where(Expr::col(CommandLogsColumn::CommandId).eq(self.id))
+            .order_by(CommandLogsColumn::CreatedAt, Order::Desc);
 
         if let Some(level) = query.level {
-            select = select.filter(CommandLogsColumn::Level.eq(level))
+            select.and_where(Expr::col(CommandLogsColumn::Level).eq(level as i32));
         }
 
         if let Some(start_date) = query.start_date {
-            select = select.filter(CommandLogsColumn::CreatedAt.gt(start_date))
+            select.and_where(Expr::col(CommandLogsColumn::CreatedAt).gt(start_date));
         }
 
         if let Some(end_date) = query.end_date {
-            select = select.filter(CommandLogsColumn::CreatedAt.lt(end_date))
+            select.and_where(Expr::col(CommandLogsColumn::CreatedAt).lt(end_date));
         }
 
         if let Some(offset) = query.offset {
-            select = select.offset(offset);
+            select.offset(offset);
         }
 
         if let Some(limit) = query.limit {
-            select = select.limit(limit);
+            select.limit(limit);
         }
 
-        select
-            .order_by(CommandLogsColumn::CreatedAt, sea_orm::Order::Desc)
-            .all(db)
-            .await
+        let (sql, values) = select.build_sqlx(SqliteQueryBuilder);
+        let results = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
+        Ok(results)
     }
 
-    pub async fn get_aliases<C>(&self, db: &C) -> DbResult<Vec<String>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        self.find_related(super::command_aliases::Entity)
-            .order_by(CommandAliasColumn::Order, sea_orm::Order::Asc)
-            .all(db)
-            .await
-            .map(|aliases| aliases.into_iter().map(|alias| alias.alias).collect())
+    pub async fn get_aliases(&self, db: &DbPool) -> DbResult<Vec<String>> {
+        #[derive(FromRow)]
+        struct Alias {
+            alias: String,
+        }
+
+        let (sql, values) = Query::select()
+            .columns([CommandAliasColumn::Alias])
+            .from(CommandAliasTable)
+            .and_where(Expr::col(CommandAliasColumn::CommandId).eq(self.id))
+            .order_by(CommandAliasColumn::Order, Order::Asc)
+            .build_sqlx(SqliteQueryBuilder);
+
+        let results: Vec<Alias> = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
+        Ok(results.into_iter().map(|value| value.alias).collect())
     }
 
-    pub async fn set_aliases<C>(&self, db: &C, aliases: Vec<String>) -> DbResult<()>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
+    pub async fn set_aliases(&self, db: &DbPool, aliases: Vec<String>) -> DbResult<()> {
         // Delete all command aliases for the command
-        super::command_aliases::Entity::delete_many()
-            .filter(CommandAliasColumn::CommandId.eq(self.id))
-            .exec(db)
-            .await?;
+        {
+            let (sql, values) = Query::delete()
+                .from_table(CommandAliasTable)
+                .and_where(Expr::col(CommandAliasColumn::CommandId).eq(self.id))
+                .build_sqlx(SqliteQueryBuilder);
+            sqlx::query_with(&sql, values).execute(db).await?;
+        }
 
-        super::command_aliases::Entity::insert_many(aliases.into_iter().enumerate().map(
-            |(index, alias)| CommandAliasActiveModel {
-                id: Set(Uuid::new_v4()),
-                command_id: Set(self.id),
-                alias: Set(alias),
-                order: Set(index as u32),
-            },
-        ))
-        .on_conflict_do_nothing()
-        .exec_without_returning(db)
-        .await?;
+        // Insert new aliases
+        {
+            let (sql, values) = Query::insert()
+                .into_table(CommandAliasTable)
+                .columns([
+                    CommandAliasColumn::Id,
+                    CommandAliasColumn::CommandId,
+                    CommandAliasColumn::Alias,
+                    CommandAliasColumn::Order,
+                ])
+                .values_from_panic(aliases.into_iter().enumerate().map(|(index, alias)| {
+                    [
+                        Uuid::new_v4().into(),
+                        self.id.into(),
+                        alias.into(),
+                        (index as u32).into(),
+                    ]
+                }))
+                .build_sqlx(SqliteQueryBuilder);
+
+            sqlx::query_with(&sql, values).execute(db).await?;
+        }
 
         Ok(())
     }
 
-    pub async fn get_executions<C>(
+    pub async fn get_executions(
         &self,
-        db: &C,
+        db: &DbPool,
         query: ExecutionsQuery,
-    ) -> DbResult<Vec<CommandExecutionModel>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        let mut select = self.find_related(super::command_executions::Entity);
+    ) -> DbResult<Vec<CommandExecutionModel>> {
+        let mut select = Query::select();
+        select
+            .from(CommandExecutionsTable)
+            .columns([
+                CommandExecutionsColumn::Id,
+                CommandExecutionsColumn::CommandId,
+                CommandExecutionsColumn::Metadata,
+                CommandExecutionsColumn::CreatedAt,
+            ])
+            .and_where(Expr::col(CommandExecutionsColumn::CommandId).eq(self.id))
+            .order_by(CommandExecutionsColumn::CreatedAt, Order::Desc);
 
         if let Some(start_date) = query.start_date {
-            select = select.filter(CommandExecutionColumn::CreatedAt.gt(start_date))
+            select.and_where(Expr::col(CommandExecutionsColumn::CreatedAt).gt(start_date));
         }
 
         if let Some(end_date) = query.end_date {
-            select = select.filter(CommandExecutionColumn::CreatedAt.lt(end_date))
+            select.and_where(Expr::col(CommandExecutionsColumn::CreatedAt).lt(end_date));
         }
 
         if let Some(offset) = query.offset {
-            select = select.offset(offset);
+            select.offset(offset);
         }
 
         if let Some(limit) = query.limit {
-            select = select.limit(limit);
+            select.limit(limit);
         }
 
-        select
-            .order_by(CommandExecutionColumn::CreatedAt, sea_orm::Order::Desc)
-            .all(db)
-            .await
+        let (sql, values) = select.build_sqlx(SqliteQueryBuilder);
+        let results = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
+        Ok(results)
     }
 
-    pub async fn update_order<C>(db: &C, data: Vec<UpdateOrdering>) -> DbResult<()>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        data.chunks(1000)
-            .map(|order_chunk| -> BoxFuture<'_, DbResult<UpdateResult>> {
-                let mut case = CaseStatement::new()
-                    // Use the current column value when not specified
-                    .finally(Expr::col(Column::Order));
+    pub async fn update_order(db: &DbPool, data: Vec<UpdateOrdering>) -> DbResult<()> {
+        for order_chunk in data.chunks(1000) {
+            let mut case = CaseStatement::new()
+                // Use the current column value when not specified
+                .finally(Expr::col(CommandsColumn::Order));
 
-                // Add case for all updated values
-                for order in order_chunk {
-                    case = case.case(Expr::col(Column::Id).eq(order.id), Expr::value(order.order));
-                }
+            // Add case for all updated values
+            for order in order_chunk {
+                case = case.case(
+                    Expr::col(CommandsColumn::Id).eq(order.id),
+                    Expr::value(order.order),
+                );
+            }
 
-                Box::pin(
-                    Entity::update_many()
-                        .col_expr(Column::Order, case.into())
-                        .exec(db),
-                )
-            })
-            .collect::<FuturesUnordered<BoxFuture<'_, DbResult<UpdateResult>>>>()
-            .try_collect::<Vec<UpdateResult>>()
-            .await?;
+            let (sql, values) = Query::update()
+                .table(CommandsTable)
+                .value(CommandsColumn::Order, case)
+                .build_sqlx(SqliteQueryBuilder);
+
+            sqlx::query_with(&sql, values).execute(db).await?;
+        }
 
         Ok(())
     }
+
+    pub async fn create_log(db: &DbPool, create: CreateCommandLog) -> DbResult<()> {
+        let id = Uuid::new_v4();
+
+        let (sql, values) = Query::insert()
+            .into_table(CommandLogsTable)
+            .columns([
+                CommandLogsColumn::Id,
+                CommandLogsColumn::CommandId,
+                CommandLogsColumn::Level,
+                CommandLogsColumn::Message,
+                CommandLogsColumn::CreatedAt,
+            ])
+            .values_panic([
+                id.into(),
+                create.command_id.into(),
+                (create.level as i32).into(),
+                create.message.to_string().into(),
+                create.created_at.into(),
+            ])
+            .build_sqlx(SqliteQueryBuilder);
+
+        sqlx::query_with(&sql, values).execute(db).await?;
+
+        Ok(())
+    }
+
+    pub async fn delete_many_logs(db: &DbPool, ids: &[Uuid]) -> DbResult<()> {
+        let (sql, values) = Query::delete()
+            .from_table(CommandLogsTable)
+            .and_where(Expr::col(CommandLogsColumn::Id).is_in(ids.iter().copied()))
+            .build_sqlx(SqliteQueryBuilder);
+        sqlx::query_with(&sql, values).execute(db).await?;
+        Ok(())
+    }
+
+    pub async fn delete_logs_before(db: &DbPool, start_date: DateTime<Utc>) -> DbResult<()> {
+        let (sql, values) = Query::delete()
+            .from_table(CommandLogsTable)
+            .and_where(Expr::col(CommandLogsColumn::CreatedAt).lt(start_date))
+            .build_sqlx(SqliteQueryBuilder);
+        sqlx::query_with(&sql, values).execute(db).await?;
+        Ok(())
+    }
+
+    pub async fn get_logs_estimate_size(db: &DbPool) -> DbResult<u32> {
+        #[derive(Default, FromRow)]
+        struct PartialModel {
+            total_message_length: Option<u32>,
+        }
+
+        let (sql, values) = Query::select()
+            .from(CommandLogsTable)
+            .expr_as(
+                Func::sum(Func::char_length(Expr::col(CommandLogsColumn::Message))),
+                Alias::new("total_message_length"),
+            )
+            .build_sqlx(SqliteQueryBuilder);
+
+        let result: PartialModel = sqlx::query_as_with(&sql, values).fetch_one(db).await?;
+        Ok(result.total_message_length.unwrap_or_default())
+    }
+
+    pub async fn create_execution(
+        db: &DbPool,
+        create: CreateCommandExecution,
+    ) -> anyhow::Result<CommandExecutionModel> {
+        let id = Uuid::new_v4();
+        let model = CommandExecutionModel {
+            id,
+            command_id: create.command_id,
+            metadata: create.metadata,
+            created_at: create.created_at,
+        };
+
+        let metadata_value = serde_json::to_value(&model.metadata)?;
+
+        let (sql, values) = Query::insert()
+            .into_table(CommandExecutionsTable)
+            .columns([
+                CommandExecutionsColumn::Id,
+                CommandExecutionsColumn::CommandId,
+                CommandExecutionsColumn::Metadata,
+                CommandExecutionsColumn::CreatedAt,
+            ])
+            .values_panic([
+                model.id.into(),
+                model.command_id.into(),
+                metadata_value.into(),
+                model.created_at.into(),
+            ])
+            .build_sqlx(SqliteQueryBuilder);
+
+        sqlx::query_with(&sql, values).execute(db).await?;
+
+        Ok(model)
+    }
+
+    pub async fn delete_executions_before(db: &DbPool, start_date: DateTime<Utc>) -> DbResult<()> {
+        let (sql, values) = Query::delete()
+            .from_table(CommandExecutionsTable)
+            .and_where(Expr::col(CommandExecutionsColumn::CreatedAt).lt(start_date))
+            .build_sqlx(SqliteQueryBuilder);
+        sqlx::query_with(&sql, values).execute(db).await?;
+        Ok(())
+    }
+
+    pub async fn delete_many_executions(db: &DbPool, ids: &[Uuid]) -> DbResult<()> {
+        let (sql, values) = Query::delete()
+            .from_table(CommandExecutionsTable)
+            .and_where(Expr::col(CommandExecutionsColumn::Id).is_in(ids.iter().copied()))
+            .build_sqlx(SqliteQueryBuilder);
+        sqlx::query_with(&sql, values).execute(db).await?;
+        Ok(())
+    }
+
+    pub async fn get_executions_estimate_size(db: &DbPool) -> DbResult<u32> {
+        #[derive(Default, FromRow)]
+        struct PartialModel {
+            total_message_length: Option<u32>,
+        }
+
+        let (sql, values) = Query::select()
+            .from(CommandExecutionsTable)
+            .expr_as(
+                Func::sum(Func::char_length(Expr::col(
+                    EventExecutionsColumn::Metadata,
+                ))),
+                Alias::new("total_message_length"),
+            )
+            .build_sqlx(SqliteQueryBuilder);
+
+        let result: PartialModel = sqlx::query_as_with(&sql, values).fetch_one(db).await?;
+        Ok(result.total_message_length.unwrap_or_default())
+    }
+}
+
+#[derive(IdenStatic, Copy, Clone)]
+#[iden(rename = "commands")]
+pub struct CommandsTable;
+
+#[derive(IdenStatic, Copy, Clone)]
+pub enum CommandsColumn {
+    Id,
+    Enabled,
+    Name,
+    Command,
+    Outcome,
+    Cooldown,
+    RequireRole,
+    Order,
+    CreatedAt,
+}
+
+#[derive(IdenStatic, Copy, Clone)]
+#[iden(rename = "command_logs")]
+pub struct CommandLogsTable;
+
+#[derive(IdenStatic, Copy, Clone)]
+pub enum CommandLogsColumn {
+    Id,
+    CommandId,
+    Level,
+    Message,
+    CreatedAt,
+}
+
+#[derive(IdenStatic, Copy, Clone)]
+#[iden(rename = "command_executions")]
+pub struct CommandExecutionsTable;
+
+#[derive(IdenStatic, Copy, Clone)]
+pub enum CommandExecutionsColumn {
+    Id,
+    CommandId,
+    Metadata,
+    CreatedAt,
+}
+
+#[derive(IdenStatic, Copy, Clone)]
+#[iden(rename = "command_alias")]
+pub struct CommandAliasTable;
+
+#[derive(IdenStatic, Copy, Clone)]
+pub enum CommandAliasColumn {
+    Id,
+    CommandId,
+    Alias,
+    Order,
 }

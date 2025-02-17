@@ -1,9 +1,9 @@
 use super::CmdResult;
+use crate::database::DbPool;
 use crate::events::outcome::resolve_items;
 use crate::overlay::{OverlayMessage, OverlayMessageSender, ThrowItemConfig};
 use anyhow::Context;
 use log::debug;
-use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use std::{
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
@@ -18,7 +18,7 @@ use uuid::Uuid;
 pub async fn test_throw(
     item_ids: Vec<Uuid>,
     amount: Option<i64>,
-    db: State<'_, DatabaseConnection>,
+    db: State<'_, DbPool>,
     event_sender: State<'_, OverlayMessageSender>,
 ) -> CmdResult<()> {
     let db = db.inner();
@@ -41,7 +41,7 @@ pub async fn test_throw_barrage(
     amount_per_throw: u32,
     amount: i64,
     frequency: u32,
-    db: State<'_, DatabaseConnection>,
+    db: State<'_, DbPool>,
     event_sender: State<'_, OverlayMessageSender>,
 ) -> CmdResult<()> {
     let db = db.inner();

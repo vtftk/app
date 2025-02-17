@@ -1,23 +1,24 @@
 use anyhow::Context;
 use chrono::{Days, Utc};
+
 use entity::{
-    app_data::AppDataModel, chat_history::ChatHistoryModel,
-    command_executions::CommandExecutionModel, command_logs::CommandLogsModel,
-    event_executions::EventExecutionModel, event_logs::EventLogsModel,
+    app_data::AppDataModel, chat_history::ChatHistoryModel, commands::CommandModel,
+    events::EventModel,
 };
-use log::warn;
-use migration::Migrator;
-use sea_orm::{Database, DatabaseConnection};
-use sea_orm_migration::MigratorTrait;
-use std::path::PathBuf;
+use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
+use std::{path::PathBuf, str::FromStr};
 use tokio::fs::{create_dir_all, File};
 
 pub mod entity;
-mod migration;
+mod migrations;
+
+pub type DbPool = SqlitePool;
+pub type DbErr = sqlx::Error;
+pub type DbResult<T> = Result<T, DbErr>;
 
 /// Connects to the SQLite database at the provided path, creating a
 /// new database file if none exist
-pub async fn connect_database(path: PathBuf) -> anyhow::Result<DatabaseConnection> {
+pub async fn connect_database(path: PathBuf) -> anyhow::Result<DbPool> {
     if !path.exists() {
         let parent = path.parent().context("database path invalid")?;
         create_dir_all(parent)
@@ -28,34 +29,36 @@ pub async fn connect_database(path: PathBuf) -> anyhow::Result<DatabaseConnectio
     }
 
     let path = path.to_str().context("invalid db path")?;
-
     let path = format!("sqlite://{path}");
 
-    let options = sea_orm::ConnectOptions::new(path);
-    let db = Database::connect(options).await?;
+    let options = SqliteConnectOptions::from_str(&path).context("failed to parse connection")?;
+    let db = SqlitePool::connect_with(options)
+        .await
+        .context("failed to connect")?;
 
-    setup_database(&db).await?;
+    setup_database(&db).await.context("failed to setup")?;
 
     Ok(db)
 }
 
 #[cfg(test)]
-pub async fn mock_database() -> DatabaseConnection {
-    let db = Database::connect("sqlite::memory:").await.unwrap();
+pub async fn mock_database() -> DbPool {
+    let db = SqlitePool::connect_with(SqliteConnectOptions::from_str("sqlite::memory:").unwrap())
+        .await
+        .unwrap();
+
     setup_database(&db).await.unwrap();
     db
 }
 
-pub async fn setup_database(db: &DatabaseConnection) -> anyhow::Result<()> {
-    if let Err(err) = Migrator::up(db, None).await {
-        warn!("failed to apply/check database migrations: {:?}", err);
-        // TODO: Check for applied forward migrations, these are not always failing changes
-    }
-
+pub async fn setup_database(db: &DbPool) -> anyhow::Result<()> {
+    migrations::migrate(db)
+        .await
+        .context("failed to migrate database")?;
     Ok(())
 }
 
-pub async fn clean_old_data(db: DatabaseConnection) -> anyhow::Result<()> {
+pub async fn clean_old_data(db: DbPool) -> anyhow::Result<()> {
     let main_config = AppDataModel::get_main_config(&db).await?;
 
     let now = Utc::now();
@@ -66,8 +69,8 @@ pub async fn clean_old_data(db: DatabaseConnection) -> anyhow::Result<()> {
             .checked_sub_days(Days::new(main_config.clean_logs_days))
             .context("system time is incorrect")?;
 
-        EventLogsModel::delete_before(&db, clean_date).await?;
-        CommandLogsModel::delete_before(&db, clean_date).await?;
+        EventModel::delete_logs_before(&db, clean_date).await?;
+        CommandModel::delete_logs_before(&db, clean_date).await?;
     }
 
     // Clean executions
@@ -76,8 +79,8 @@ pub async fn clean_old_data(db: DatabaseConnection) -> anyhow::Result<()> {
             .checked_sub_days(Days::new(main_config.clean_executions_days))
             .context("system time is incorrect")?;
 
-        CommandExecutionModel::delete_before(&db, clean_date).await?;
-        EventExecutionModel::delete_before(&db, clean_date).await?;
+        EventModel::delete_executions_before(&db, clean_date).await?;
+        CommandModel::delete_executions_before(&db, clean_date).await?;
     }
 
     // Clean chat history

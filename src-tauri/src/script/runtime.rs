@@ -1,4 +1,5 @@
 use crate::{
+    database::DbPool,
     events::matching::{EventData, EventInputData},
     overlay::OverlayMessageSender,
     script::ops::{
@@ -20,7 +21,6 @@ use deno_core::{
     v8::{self, Global, Local},
     JsRuntime, PollEventLoopOptions, RuntimeOptions,
 };
-use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use std::{future::Future, path::PathBuf, pin::Pin, rc::Rc, task::Poll};
 use tokio::{
@@ -37,7 +37,7 @@ pub struct ScriptRuntimeData {
     pub overlay_sender: OverlayMessageSender,
 
     /// Access to the database
-    pub db: DatabaseConnection,
+    pub db: DbPool,
 
     /// Access to the twitch manager
     pub twitch: Twitch,

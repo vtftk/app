@@ -1,28 +1,29 @@
 use super::matching::{EventData, EventInputData};
 use crate::{
-    database::entity::{
-        events::{
-            EventModel, EventOutcome, EventOutcomeBits, EventOutcomeChannelEmotes,
-            EventOutcomePlaySound, EventOutcomeScript, EventOutcomeSendChat, EventOutcomeThrowable,
-            EventOutcomeTriggerHotkey, ThrowableAmountData,
+    database::{
+        entity::{
+            events::{
+                EventModel, EventOutcome, EventOutcomeBits, EventOutcomeChannelEmotes,
+                EventOutcomePlaySound, EventOutcomeScript, EventOutcomeSendChat,
+                EventOutcomeThrowable, EventOutcomeTriggerHotkey, ThrowableAmountData,
+            },
+            items::{ItemConfig, ItemImageConfig, ItemModel},
+            sounds::{PartialSoundModel, SoundModel},
         },
-        items::{ItemConfig, ItemImageConfig, ItemModel},
-        items_sounds::SoundType,
-        sounds::{PartialSoundModel, SoundModel},
+        DbPool,
     },
     overlay::{ItemsWithSounds, OverlayMessage, PartialItemModel, ThrowItemConfig},
     script::runtime::{RuntimeExecutionContext, ScriptExecutorHandle},
     twitch::manager::Twitch,
 };
 use anyhow::{anyhow, Context};
-use sea_orm::DatabaseConnection;
 use std::collections::HashSet;
 use twitch_api::types::SubscriptionTier;
 use uuid::Uuid;
 
 /// Produce a message for an outcome
 pub async fn produce_outcome_message(
-    db: &DatabaseConnection,
+    db: &DbPool,
     twitch: &Twitch,
     script_handle: &ScriptExecutorHandle,
 
@@ -168,7 +169,7 @@ async fn send_chat_message(
 
 /// Produce a bits throwing outcome message
 async fn throw_bits_outcome(
-    db: &DatabaseConnection,
+    db: &DbPool,
     event_data: EventData,
     data: EventOutcomeBits,
 ) -> anyhow::Result<OverlayMessage> {
@@ -338,7 +339,7 @@ fn create_throwable_message(
 
 // Produce a throwable message
 async fn throwable_outcome(
-    db: &DatabaseConnection,
+    db: &DbPool,
     event_data: EventData,
     data: EventOutcomeThrowable,
 ) -> anyhow::Result<OverlayMessage> {
@@ -356,7 +357,7 @@ fn trigger_hotkey_outcome(data: EventOutcomeTriggerHotkey) -> anyhow::Result<Ove
 
 /// Produce a sound outcome event message
 async fn play_sound_outcome(
-    db: &DatabaseConnection,
+    db: &DbPool,
     data: EventOutcomePlaySound,
 ) -> anyhow::Result<OverlayMessage> {
     let config = SoundModel::get_by_id_partial(db, data.sound_id)
@@ -366,36 +367,30 @@ async fn play_sound_outcome(
     Ok(OverlayMessage::PlaySound { config })
 }
 
-pub async fn resolve_items(
-    db: &DatabaseConnection,
-    item_ids: &[Uuid],
-) -> anyhow::Result<ItemsWithSounds> {
+pub async fn resolve_items(db: &DbPool, item_ids: &[Uuid]) -> anyhow::Result<ItemsWithSounds> {
     let mut sound_ids = HashSet::new();
 
     let items: Vec<PartialItemModel> = ItemModel::get_by_ids_with_sounds(db, item_ids)
         .await?
         .into_iter()
-        .map(|(item, sounds)| {
-            let mut impact_sound_ids = Vec::new();
-            let mut windup_sound_ids = Vec::new();
-
-            for sound in sounds {
-                sound_ids.insert(sound.sound_id);
-
-                match sound.sound_type {
-                    SoundType::Impact => impact_sound_ids.push(sound.sound_id),
-                    SoundType::Windup => windup_sound_ids.push(sound.sound_id),
-                }
-            }
-
-            PartialItemModel {
-                id: item.id,
-                config: item.config,
-                impact_sound_ids,
-                windup_sound_ids,
-            }
+        .map(|item| PartialItemModel {
+            id: item.item.id,
+            config: item.item.config,
+            impact_sound_ids: item.impact_sounds_ids,
+            windup_sound_ids: item.windup_sounds_ids,
         })
         .collect();
+
+    sound_ids.extend(
+        items
+            .iter()
+            .flat_map(|item| {
+                item.impact_sound_ids
+                    .iter()
+                    .chain(item.windup_sound_ids.iter())
+            })
+            .copied(),
+    );
 
     // Collect all unique sound IDs
     let sound_ids: Vec<Uuid> = sound_ids.into_iter().collect::<Vec<Uuid>>();

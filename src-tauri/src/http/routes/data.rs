@@ -1,7 +1,10 @@
 use crate::{
-    database::entity::{
-        secrets::{SecretModel, SetSecret},
-        VT_SECRET_KEY,
+    database::{
+        entity::{
+            secrets::{SecretsModel, SetSecret},
+            VT_SECRET_KEY,
+        },
+        DbPool,
     },
     http::{
         error::{DynHttpError, HttpResult},
@@ -17,7 +20,6 @@ use axum::{
     Extension, Json,
 };
 use reqwest::header::{CACHE_CONTROL, CONTENT_TYPE};
-use sea_orm::DatabaseConnection;
 use tauri::{path::BaseDirectory, AppHandle, Manager};
 
 /// GET /content/:folder/:name  
@@ -81,12 +83,12 @@ pub async fn get_defaults_file(
 ///
 /// Set the current VTube Studio access token for the overlay
 pub async fn handle_set_auth_token(
-    Extension(db): Extension<DatabaseConnection>,
+    Extension(db): Extension<DbPool>,
     Json(req): Json<SetAuthTokenRequest>,
 ) -> HttpResult<()> {
     if let Some(access_token) = req.auth_token {
         // Set new access token
-        SecretModel::set(
+        SecretsModel::set(
             &db,
             SetSecret {
                 key: VT_SECRET_KEY.to_string(),
@@ -98,7 +100,7 @@ pub async fn handle_set_auth_token(
         .context("failed to store vt access token")?;
     } else {
         // Clear existing access token
-        SecretModel::delete(&db, VT_SECRET_KEY)
+        SecretsModel::delete_by_key(&db, VT_SECRET_KEY)
             .await
             .context("failed to delete original token")?;
     }
@@ -110,9 +112,9 @@ pub async fn handle_set_auth_token(
 ///
 /// Retrieve the current VTube Studio access token for the overlay
 pub async fn handle_get_auth_token(
-    Extension(db): Extension<DatabaseConnection>,
+    Extension(db): Extension<DbPool>,
 ) -> HttpResult<GetAuthTokenResponse> {
-    let secret = SecretModel::get(&db, VT_SECRET_KEY)
+    let secret = SecretsModel::get_by_key(&db, VT_SECRET_KEY)
         .await
         .context("failed to get access")?;
 

@@ -1,37 +1,31 @@
-use super::shared::{DbResult, MinMax};
-use anyhow::Context;
-use sea_orm::{entity::prelude::*, sea_query::OnConflict, ActiveValue::Set, FromJsonQueryResult};
+use crate::database::{DbPool, DbResult};
+use sea_query::{IdenStatic, OnConflict, Query, SqliteQueryBuilder};
+use sea_query_binder::SqlxBinder;
 use serde::{Deserialize, Serialize};
+use sqlx::prelude::FromRow;
 
-// Type alias helpers for the database entity types
-pub type ModelDataModel = Model;
+use super::shared::MinMax;
 
 pub type ModelId = String;
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "model_data")]
-pub struct Model {
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ModelDataModel {
     /// Unique ID for the sound
-    #[sea_orm(primary_key)]
     pub id: ModelId,
     /// Name of the model in VT studio
     pub name: String,
     /// Calibration data for the model
+    #[sqlx(json)]
     pub calibration: ModelCalibration,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, FromJsonQueryResult)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ModelCalibration {
     /// Min and max X positions of the model
     pub x: MinMax<f64>,
     /// Min and max Y positions of the model
     pub y: MinMax<f64>,
 }
-
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
-
-impl ActiveModelBehavior for ActiveModel {}
 
 #[derive(Debug, Deserialize)]
 pub struct CreateModelData {
@@ -40,48 +34,63 @@ pub struct CreateModelData {
     pub calibration: ModelCalibration,
 }
 
-impl Model {
+impl ModelDataModel {
     /// Create a new script
-    pub async fn create<C>(db: &C, create: CreateModelData) -> anyhow::Result<Model>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        let active_model = ActiveModel {
-            id: Set(create.id.clone()),
-            name: Set(create.name),
-            calibration: Set(create.calibration),
+    pub async fn create(db: &DbPool, create: CreateModelData) -> anyhow::Result<ModelDataModel> {
+        let model = ModelDataModel {
+            id: create.id,
+            name: create.name,
+            calibration: create.calibration,
         };
 
-        Entity::insert(active_model)
+        let calibration_value = serde_json::to_value(&model.calibration)?;
+        let (sql, values) = Query::insert()
+            .into_table(ModelDataTable)
+            .columns(ModelDataModel::columns())
+            .values_panic([
+                model.id.clone().into(),
+                model.name.clone().into(),
+                calibration_value.into(),
+            ])
             .on_conflict(
                 OnConflict::new()
-                    .update_column(Column::Name)
-                    .update_column(Column::Calibration)
+                    .update_column(ModelDataColumn::Name)
+                    .update_column(ModelDataColumn::Calibration)
                     .to_owned(),
             )
-            .exec_without_returning(db)
-            .await?;
+            .build_sqlx(SqliteQueryBuilder);
 
-        let model = Self::get_by_id(db, &create.id)
-            .await?
-            .context("model was not inserted")?;
+        sqlx::query_with(&sql, values).execute(db).await?;
 
         Ok(model)
     }
 
-    /// Find a specific model data by ID
-    pub async fn get_by_id<C>(db: &C, id: &str) -> DbResult<Option<Self>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        Entity::find_by_id(id).one(db).await
+    /// Find all model data
+    pub async fn all(db: &DbPool) -> DbResult<Vec<ModelDataModel>> {
+        let (sql, values) = Query::select()
+            .columns(ModelDataModel::columns())
+            .from(ModelDataTable)
+            .build_sqlx(SqliteQueryBuilder);
+        let result = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
+        Ok(result)
     }
 
-    /// Find all model data
-    pub async fn all<C>(db: &C) -> DbResult<Vec<Self>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        Entity::find().all(db).await
+    pub fn columns() -> [ModelDataColumn; 3] {
+        [
+            ModelDataColumn::Id,
+            ModelDataColumn::Name,
+            ModelDataColumn::Calibration,
+        ]
     }
+}
+
+#[derive(IdenStatic, Copy, Clone)]
+#[iden(rename = "model_data")]
+pub struct ModelDataTable;
+
+#[derive(IdenStatic, Copy, Clone)]
+pub enum ModelDataColumn {
+    Id,
+    Name,
+    Calibration,
 }

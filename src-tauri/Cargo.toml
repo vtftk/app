@@ -76,16 +76,41 @@ deno_core = "0.323.0"
 
 # Date & Time
 chrono = { version = "0.4.39", features = ["serde"] }
+async-trait = "0.1.86"
+strum = { version = "0.27.1", features = ["derive"] }
 
-# App database
-[dependencies.sea-orm]
-version = "1.1.0"
-features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros"]
+[dependencies.sqlx]
+version = "0.8.2"
+features = [
+    "runtime-tokio",
+    "tls-rustls",
+    "sqlite",
+    "derive",
+    "uuid",
+    "chrono",
+    "json",
+]
 
-# Database migration runner
-[dependencies.sea-orm-migration]
-version = "1.1.0"
-features = ["sqlx-sqlite", "runtime-tokio-rustls"]
+[dependencies.sea-query]
+version = "0.32.1"
+features = [
+    "derive",
+    "thread-safe",
+    "backend-sqlite",
+    "with-chrono",
+    "with-json",
+    "with-uuid",
+]
+
+[dependencies.sea-query-binder]
+version = "0.7.0"
+features = [
+    "sqlx-sqlite",
+    "with-chrono",
+    "with-json",
+    "with-uuid",
+    "runtime-tokio-rustls",
+]
 
 [profile.dev]
 incremental = true # Compile your binary in smaller steps.

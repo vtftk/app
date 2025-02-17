@@ -1,10 +1,9 @@
 use crate::{
     commands::CmdResult,
-    database::entity::model_data::ModelDataModel,
+    database::{entity::model_data::ModelDataModel, DbPool},
     http::models::CalibrationStep,
     overlay::{OverlayMessage, OverlayMessageSender},
 };
-use sea_orm::DatabaseConnection;
 use tauri::State;
 
 /// Set the current calibration step
@@ -30,9 +29,7 @@ pub fn calibration_move_model(
 
 /// Obtains the calibration data for all models
 #[tauri::command]
-pub async fn get_calibration_data(
-    db: State<'_, DatabaseConnection>,
-) -> CmdResult<Vec<ModelDataModel>> {
+pub async fn get_calibration_data(db: State<'_, DbPool>) -> CmdResult<Vec<ModelDataModel>> {
     let db = db.inner();
     let model_data = ModelDataModel::all(db).await?;
     Ok(model_data)

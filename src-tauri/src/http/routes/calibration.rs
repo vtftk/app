@@ -1,7 +1,10 @@
 use crate::{
-    database::entity::{
-        model_data::{CreateModelData, ModelCalibration, ModelDataModel},
-        shared::MinMax,
+    database::{
+        entity::{
+            model_data::{CreateModelData, ModelCalibration, ModelDataModel},
+            shared::MinMax,
+        },
+        DbPool,
     },
     http::{
         error::HttpResult,
@@ -11,14 +14,13 @@ use crate::{
 use anyhow::Context;
 use axum::{Extension, Json};
 use log::info;
-use sea_orm::DatabaseConnection;
 use tauri::{AppHandle, Emitter};
 
 /// GET /calibration
 ///
 /// Requests the current calibration data for all models
 pub async fn handle_calibration_data(
-    Extension(db): Extension<DatabaseConnection>,
+    Extension(db): Extension<DbPool>,
 ) -> HttpResult<Vec<ModelDataModel>> {
     Ok(Json(
         ModelDataModel::all(&db)
@@ -31,7 +33,7 @@ pub async fn handle_calibration_data(
 ///
 /// Handles updating the calibration progress
 pub async fn handle_calibration_progress(
-    Extension(db): Extension<DatabaseConnection>,
+    Extension(db): Extension<DbPool>,
     Extension(app_handle): Extension<AppHandle>,
     Json(req): Json<CalibrationStepData>,
 ) -> HttpResult<CalibrationProgressRes> {

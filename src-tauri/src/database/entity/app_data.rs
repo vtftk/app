@@ -1,34 +1,22 @@
-use anyhow::Context;
-use chrono::Utc;
-use sea_orm::{
-    entity::prelude::*, sea_query::OnConflict, ActiveValue::Set, FromJsonQueryResult,
-    FromQueryResult, QuerySelect,
-};
+use chrono::{DateTime, Utc};
+use sea_query::{Alias, Expr, IdenStatic, OnConflict, Query, SqliteQueryBuilder};
+use sea_query_binder::SqlxBinder;
 use serde::{Deserialize, Serialize};
+use sqlx::prelude::FromRow;
 use twitch_api::{helix::Scope, twitch_oauth2::AccessToken};
 
-// Type alias helpers for the database entity types
-pub type AppDataModel = Model;
+use crate::database::DbPool;
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "app_data")]
-pub struct Model {
-    /// Unique ID for the sound
-    #[sea_orm(primary_key)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, FromRow)]
+pub struct AppDataModel {
     pub id: i32,
-
+    #[sqlx(json)]
     pub data: AppData,
-
-    pub created_at: DateTimeUtc,
-    pub last_modified_at: DateTimeUtc,
+    pub created_at: DateTime<Utc>,
+    pub last_modified_at: DateTime<Utc>,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
-
-impl ActiveModelBehavior for ActiveModel {}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default, FromJsonQueryResult)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct AppData {
     #[serde(flatten)]
@@ -60,7 +48,7 @@ pub struct OverlayConfig {
     pub physics_config: PhysicsConfig,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromJsonQueryResult)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct MainConfig {
     /// Minimize to try instead of closing
@@ -81,17 +69,6 @@ pub struct MainConfig {
     pub auto_updating: bool,
     /// Port for the HTTP server
     http_port: u16,
-}
-
-impl MainConfig {
-    pub fn get_http_port(&self) -> u16 {
-        #[cfg(not(debug_assertions))]
-        return self.http_port;
-
-        // Debug fixed port override
-        #[cfg(debug_assertions)]
-        return 58372;
-    }
 }
 
 pub fn default_http_port() -> u16 {
@@ -262,46 +239,63 @@ impl Default for PhysicsConfig {
     }
 }
 
-impl Model {
+impl AppDataModel {
     /// Only one row should ever be created and should have this ID
     const SINGLETON_ID: i32 = 1;
 
-    /// Create a new sound
-    pub async fn set<C>(db: &C, app_data: AppData) -> anyhow::Result<Model>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        let active_model = ActiveModel {
-            id: Set(Self::SINGLETON_ID),
-            data: Set(app_data),
-            created_at: Set(Utc::now()),
-            last_modified_at: Set(Utc::now()),
+    pub async fn set(db: &DbPool, app_data: AppData) -> anyhow::Result<AppDataModel> {
+        let model = AppDataModel {
+            id: Self::SINGLETON_ID,
+            data: app_data,
+            created_at: Utc::now(),
+            last_modified_at: Utc::now(),
         };
 
-        Entity::insert(active_model)
+        let data_value = serde_json::to_value(&model.data)?;
+
+        let (sql, values) = Query::insert()
+            .into_table(AppDataTable)
+            .columns([
+                AppDataColumn::Id,
+                AppDataColumn::Data,
+                AppDataColumn::CreatedAt,
+                AppDataColumn::LastModifiedAt,
+            ])
+            .values_panic([
+                model.id.into(),
+                data_value.into(),
+                model.created_at.into(),
+                model.last_modified_at.into(),
+            ])
             .on_conflict(
-                OnConflict::column(Column::Id)
-                    .update_columns([Column::Data, Column::LastModifiedAt])
+                OnConflict::new()
+                    .update_column(AppDataColumn::Data)
+                    .update_column(AppDataColumn::LastModifiedAt)
                     .to_owned(),
             )
-            .exec_without_returning(db)
-            .await?;
+            .build_sqlx(SqliteQueryBuilder);
 
-        let model = Entity::find_by_id(Self::SINGLETON_ID)
-            .one(db)
-            .await?
-            .context("model not inserted")?;
+        sqlx::query_with(&sql, values).execute(db).await?;
 
         Ok(model)
     }
 
-    pub async fn get_or_default<C>(db: &C) -> anyhow::Result<AppData>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        let model = Entity::find_by_id(Self::SINGLETON_ID).one(db).await?;
+    pub async fn get_or_default(db: &DbPool) -> anyhow::Result<AppData> {
+        let (sql, values) = Query::select()
+            .from(AppDataTable)
+            .columns([
+                AppDataColumn::Id,
+                AppDataColumn::Data,
+                AppDataColumn::CreatedAt,
+                AppDataColumn::LastModifiedAt,
+            ])
+            .and_where(Expr::col(AppDataColumn::Id).add(Self::SINGLETON_ID))
+            .build_sqlx(SqliteQueryBuilder);
 
-        let model = match model {
+        let result: Option<AppDataModel> =
+            sqlx::query_as_with(&sql, values).fetch_optional(db).await?;
+
+        let model = match result {
             Some(value) => value,
             None => Self::set(db, Default::default()).await?,
         };
@@ -310,26 +304,27 @@ impl Model {
     }
 
     /// HTTP port is loaded pretty frequently
-    pub async fn get_http_port<C>(db: &C) -> anyhow::Result<u16>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        #[derive(Default, FromQueryResult)]
+    pub async fn get_http_port(db: &DbPool) -> anyhow::Result<u16> {
+        #[derive(FromRow)]
         struct PartialModel {
             http_port: Option<u16>,
         }
 
-        // HTTP port is loaded frequently so save on loading the entire main_config every time
-        let http_port = Entity::find_by_id(Self::SINGLETON_ID)
-            .select_only()
-            // Select just the HTTP port from the data
+        let (sql, values) = Query::select()
+            .from(AppDataTable)
+            // Select
             .expr_as(
                 Expr::cust("json_extract(data, '$.main_config.http_port')"),
-                "main_config",
+                Alias::new("http_port"),
             )
-            .into_model::<PartialModel>()
-            .one(db)
-            .await?
+            .and_where(Expr::col(AppDataColumn::Id).add(Self::SINGLETON_ID))
+            .build_sqlx(SqliteQueryBuilder);
+
+        let result: Option<PartialModel> =
+            sqlx::query_as_with(&sql, values).fetch_optional(db).await?;
+
+        // HTTP port is loaded frequently so save on loading the entire main_config every time
+        let http_port = result
             .and_then(|value| value.http_port)
             .unwrap_or_else(default_http_port);
 
@@ -344,26 +339,38 @@ impl Model {
         Ok(http_port)
     }
 
-    pub async fn get_main_config<C>(db: &C) -> anyhow::Result<MainConfig>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        #[derive(Default, FromQueryResult)]
+    pub async fn get_main_config(db: &DbPool) -> anyhow::Result<MainConfig> {
+        #[derive(FromRow)]
         struct PartialModel {
+            #[sqlx(json)]
             main_config: MainConfig,
         }
 
-        Ok(Entity::find_by_id(Self::SINGLETON_ID)
-            .select_only()
+        let (sql, values) = Query::select()
+            .from(AppDataTable)
             // Select
             .expr_as(
                 Expr::cust("json_extract(data, '$.main_config')"),
-                "main_config",
+                Alias::new("main_config"),
             )
-            .into_model::<PartialModel>()
-            .one(db)
-            .await?
-            .map(|value| value.main_config)
-            .unwrap_or_default())
+            .and_where(Expr::col(AppDataColumn::Id).add(Self::SINGLETON_ID))
+            .build_sqlx(SqliteQueryBuilder);
+
+        let result: Option<PartialModel> =
+            sqlx::query_as_with(&sql, values).fetch_optional(db).await?;
+
+        Ok(result.map(|value| value.main_config).unwrap_or_default())
     }
+}
+
+#[derive(IdenStatic, Copy, Clone)]
+#[iden(rename = "app_data")]
+pub struct AppDataTable;
+
+#[derive(IdenStatic, Copy, Clone)]
+pub enum AppDataColumn {
+    Id,
+    Data,
+    CreatedAt,
+    LastModifiedAt,
 }

@@ -1,68 +1,136 @@
-use sea_orm::TransactionTrait;
-use sea_orm_migration::prelude::*;
+use std::ops::DerefMut;
+
+use chrono::Utc;
+use sea_query::{Query, SqliteQueryBuilder};
+use sea_query_binder::SqlxBinder;
 use uuid::Uuid;
 
 use crate::database::entity::{
-    items::{CreateItem, ItemConfig, ItemImageConfig, ItemModel},
-    sounds::{CreateSound, SoundModel},
+    items::{ItemConfig, ItemImageConfig},
+    sounds::SoundType,
 };
 
-#[derive(DeriveMigrationName)]
-pub struct Migration;
+use super::{
+    m20241208_060123_create_items_table::{ItemsColumn, ItemsTable},
+    m20241208_060144_create_sounds_table::{SoundsColumn, SoundsTable},
+    m20241208_063859_create_items_sounds_junction_table::{ItemsSoundsColumn, ItemsSoundsTable},
+    Migration,
+};
+
+pub struct SeedDefaultsMigration;
 
 #[async_trait::async_trait]
-impl MigrationTrait for Migration {
-    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        let db = manager.get_connection();
-        let db = db.begin().await?;
+impl Migration for SeedDefaultsMigration {
+    fn name(&self) -> &str {
+        "m20241211_102725_seed_defaults"
+    }
+
+    async fn up(&self, db: &crate::database::DbPool) -> anyhow::Result<()> {
+        let mut db = db.begin().await?;
 
         // Populate sounds
-        let mut sound_models: Vec<SoundModel> = Vec::new();
+        let mut sound_ids: Vec<Uuid> = Vec::new();
         for (name, file_name) in DEFAULT_SOUND_FILES {
-            let model = SoundModel::create(
-                &db,
-                CreateSound {
-                    name: name.to_string(),
-                    src: format!("backend://defaults/sounds/{file_name}"),
-                    volume: 1.,
-                },
-            )
-            .await
-            .map_err(|err| DbErr::Custom(err.to_string()))?;
+            let id = Uuid::new_v4();
+            let src = format!("backend://defaults/sounds/{file_name}");
+            let volume = 1.0;
+            let order = sound_ids.len() as u32;
+            let created_at = Utc::now();
 
-            sound_models.push(model);
+            let (sql, values) = Query::insert()
+                .into_table(SoundsTable)
+                .columns([
+                    SoundsColumn::Id,
+                    SoundsColumn::Name,
+                    SoundsColumn::Src,
+                    SoundsColumn::Volume,
+                    SoundsColumn::Order,
+                    SoundsColumn::CreatedAt,
+                ])
+                .values_panic([
+                    id.into(),
+                    name.to_string().into(),
+                    src.into(),
+                    volume.into(),
+                    order.into(),
+                    created_at.into(),
+                ])
+                .build_sqlx(SqliteQueryBuilder);
+
+            sqlx::query_with(&sql, values)
+                .execute(db.deref_mut())
+                .await?;
+
+            sound_ids.push(id);
         }
 
-        let impact_sounds: Vec<Uuid> = sound_models.into_iter().map(|value| value.id).collect();
-
+        // Populate items
+        let mut item_ids: Vec<Uuid> = Vec::new();
         for (name, file_name, scale, pixelate) in DEFAULT_THROWABLES {
-            ItemModel::create(
-                &db,
-                CreateItem {
-                    name: name.to_string(),
-                    config: ItemConfig {
-                        image: ItemImageConfig {
-                            src: format!("backend://defaults/throwable_images/{file_name}"),
-                            pixelate: *pixelate,
-                            scale: *scale,
-                            weight: 1.0,
-                        },
-                        windup: Default::default(),
-                    },
-                    impact_sounds: impact_sounds.clone(),
-                    windup_sounds: Vec::new(),
+            let id = Uuid::new_v4();
+            let config = ItemConfig {
+                image: ItemImageConfig {
+                    src: format!("backend://defaults/throwable_images/{file_name}"),
+                    pixelate: *pixelate,
+                    scale: *scale,
+                    weight: 1.0,
                 },
-            )
-            .await
-            .map_err(|err| DbErr::Custom(err.to_string()))?;
+                windup: Default::default(),
+            };
+            let order = item_ids.len() as u32;
+            let created_at = Utc::now();
+            let config = serde_json::to_value(config)?;
+
+            let (sql, values) = Query::insert()
+                .into_table(ItemsTable)
+                .columns([
+                    ItemsColumn::Id,
+                    ItemsColumn::Name,
+                    ItemsColumn::Config,
+                    ItemsColumn::Order,
+                    ItemsColumn::CreatedAt,
+                ])
+                .values_panic([
+                    id.into(),
+                    name.to_string().into(),
+                    config.into(),
+                    order.into(),
+                    created_at.into(),
+                ])
+                .build_sqlx(SqliteQueryBuilder);
+
+            sqlx::query_with(&sql, values)
+                .execute(db.deref_mut())
+                .await?;
+
+            item_ids.push(id);
+        }
+
+        // Create item sound associations
+        for item_id in item_ids {
+            let (sql, values) = Query::insert()
+                .into_table(ItemsSoundsTable)
+                .columns([
+                    ItemsSoundsColumn::ItemId,
+                    ItemsSoundsColumn::SoundId,
+                    ItemsSoundsColumn::SoundType,
+                ])
+                .values_from_panic(sound_ids.iter().map(|sound_id| {
+                    [
+                        item_id.into(),
+                        (*sound_id).into(),
+                        SoundType::Impact.to_string().into(),
+                    ]
+                }))
+                .build_sqlx(SqliteQueryBuilder);
+
+            sqlx::query_with(&sql, values)
+                .execute(db.deref_mut())
+                .await?;
         }
 
         db.commit().await?;
 
-        Ok(())
-    }
-
-    async fn down(&self, _manager: &SchemaManager) -> Result<(), DbErr> {
         Ok(())
     }
 }

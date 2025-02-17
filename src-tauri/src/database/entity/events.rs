@@ -1,25 +1,24 @@
-use super::{
-    event_executions::{EventExecutionColumn, EventExecutionModel},
-    event_logs::{EventLogsColumn, EventLogsModel},
-    shared::{DbResult, ExecutionsQuery, LogsQuery, MinMax, MinimumRequireRole, UpdateOrdering},
-};
-use anyhow::Context;
-use chrono::Utc;
-use futures::{future::BoxFuture, stream::FuturesUnordered, TryStreamExt};
-use sea_orm::{
-    entity::prelude::*, sea_query::CaseStatement, ActiveValue::Set, FromJsonQueryResult,
-    IntoActiveModel, QueryOrder, QuerySelect, UpdateResult,
-};
+use chrono::{DateTime, Utc};
+use sea_query::{Alias, CaseStatement, Expr, Func, IdenStatic, Order, Query, SqliteQueryBuilder};
+use sea_query_binder::SqlxBinder;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+use sqlx::prelude::FromRow;
+use strum::{Display, EnumString};
+use uuid::Uuid;
 
-// Type alias helpers for the database entity types
-pub type EventModel = Model;
+use crate::{
+    database::{DbPool, DbResult},
+    events::TwitchEventUser,
+};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize)]
-#[sea_orm(table_name = "events")]
-pub struct Model {
+use super::shared::{
+    ExecutionsQuery, LoggingLevelDb, LogsQuery, MinMax, MinimumRequireRole, UpdateOrdering,
+};
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct EventModel {
     /// Unique ID for the sound
-    #[sea_orm(primary_key)]
     pub id: Uuid,
     /// Whether the event is enabled
     pub enabled: bool,
@@ -30,10 +29,13 @@ pub struct Model {
     #[serde(skip)]
     pub trigger_type: EventTriggerType,
     /// Input that should trigger the event
+    #[sqlx(json)]
     pub trigger: EventTrigger,
     /// Outcome the event should trigger
+    #[sqlx(json)]
     pub outcome: EventOutcome,
     /// Cooldown between each trigger of the even
+    #[sqlx(json)]
     pub cooldown: EventCooldown,
     /// Minimum required role to trigger the event
     pub require_role: MinimumRequireRole,
@@ -43,10 +45,52 @@ pub struct Model {
     pub order: u32,
 
     // Date time of creation
-    pub created_at: DateTimeUtc,
+    pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, FromJsonQueryResult)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct EventLogsModel {
+    /// Unique ID of the log
+    pub id: Uuid,
+    /// ID of the event
+    pub event_id: Uuid,
+    /// Level of the log
+    pub level: LoggingLevelDb,
+    /// Logging message
+    pub message: String,
+    /// Creation time of the event
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug)]
+pub struct CreateEventExecution {
+    pub event_id: Uuid,
+    pub metadata: EventExecutionMetadata,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct EventExecutionModel {
+    pub id: Uuid,
+    pub event_id: Uuid,
+    #[sqlx(json)]
+    pub metadata: EventExecutionMetadata,
+    pub created_at: DateTime<Utc>,
+}
+
+#[serde_as]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct EventExecutionMetadata {
+    /// User who triggered the event
+    pub user: Option<TwitchEventUser>,
+
+    /// Catchall for any other metadata
+    #[serde(flatten)]
+    #[serde_as(as = "serde_with::Map<_, _>")]
+    pub data: Vec<(String, serde_json::Value)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct EventCooldown {
     pub enabled: bool,
@@ -66,28 +110,20 @@ impl Default for EventCooldown {
 
 /// Copy of the [EventTrigger] enum but string variants to
 /// support storing in the database as strings for querying
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, EnumIter, DeriveActiveEnum)]
-#[sea_orm(rs_type = "String", db_type = "String(StringLen::None)")]
+#[derive(
+    Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, EnumString, Display,
+)]
 pub enum EventTriggerType {
-    #[sea_orm(string_value = "Redeem")]
+    #[default]
     Redeem,
-    #[sea_orm(string_value = "Command")]
     Command,
-    #[sea_orm(string_value = "Follow")]
     Follow,
-    #[sea_orm(string_value = "Subscription")]
     Subscription,
-    #[sea_orm(string_value = "GiftedSubscription")]
     GiftedSubscription,
-    #[sea_orm(string_value = "Bits")]
     Bits,
-    #[sea_orm(string_value = "Raid")]
     Raid,
-    #[sea_orm(string_value = "Timer")]
     Timer,
-    #[sea_orm(string_value = "AdBreakBegin")]
     AdBreakBegin,
-    #[sea_orm(string_value = "ShoutoutReceive")]
     ShoutoutReceive,
 }
 
@@ -108,7 +144,7 @@ impl EventTriggerType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, FromJsonQueryResult)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum EventTrigger {
     /// Redeem was triggered
@@ -261,7 +297,7 @@ pub struct EventOutcomeChannelEmotes {
     pub amount: ThrowableAmountData,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, FromJsonQueryResult)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type")]
 pub enum EventOutcome {
     /// Throw bits (Only compatible with bits trigger)
@@ -279,29 +315,6 @@ pub enum EventOutcome {
     /// Throw the emotes of a specific channel
     ChannelEmotes(EventOutcomeChannelEmotes),
 }
-
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {
-    /// Event can have many executions
-    #[sea_orm(has_many = "super::event_executions::Entity")]
-    Executions,
-    /// Event can have many logs
-    #[sea_orm(has_many = "super::event_logs::Entity")]
-    Logs,
-}
-
-impl Related<super::event_executions::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Executions.def()
-    }
-}
-impl Related<super::event_logs::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Logs.def()
-    }
-}
-
-impl ActiveModelBehavior for ActiveModel {}
 
 #[derive(Debug, Deserialize)]
 pub struct CreateEvent {
@@ -326,209 +339,493 @@ pub struct UpdateEvent {
     pub order: Option<u32>,
 }
 
-impl Model {
+#[derive(Debug)]
+pub struct CreateEventLog {
+    pub event_id: Uuid,
+    pub level: LoggingLevelDb,
+    pub message: String,
+    pub created_at: DateTime<Utc>,
+}
+
+impl EventModel {
+    fn columns() -> [EventsColumn; 11] {
+        [
+            EventsColumn::Id,
+            EventsColumn::Enabled,
+            EventsColumn::Name,
+            EventsColumn::TriggerType,
+            EventsColumn::Trigger,
+            EventsColumn::Outcome,
+            EventsColumn::Cooldown,
+            EventsColumn::RequireRole,
+            EventsColumn::OutcomeDelay,
+            EventsColumn::Order,
+            EventsColumn::CreatedAt,
+        ]
+    }
+
     /// Create a new event
-    pub async fn create<C>(db: &C, create: CreateEvent) -> anyhow::Result<Model>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
+    pub async fn create(db: &DbPool, create: CreateEvent) -> anyhow::Result<EventModel> {
         let id = Uuid::new_v4();
-        let active_model = ActiveModel {
-            id: Set(id),
-            enabled: Set(create.enabled),
-            name: Set(create.name),
-            trigger_type: Set(EventTriggerType::from_event_trigger(&create.trigger)),
-            trigger: Set(create.trigger),
-            outcome: Set(create.outcome),
-            cooldown: Set(create.cooldown),
-            require_role: Set(create.require_role),
-            outcome_delay: Set(create.outcome_delay),
-            order: Set(0),
-            created_at: Set(Utc::now()),
+        let model = EventModel {
+            id,
+            enabled: create.enabled,
+            name: create.name,
+            trigger_type: EventTriggerType::from_event_trigger(&create.trigger),
+            trigger: create.trigger,
+            outcome: create.outcome,
+            cooldown: create.cooldown,
+            require_role: create.require_role,
+            outcome_delay: create.outcome_delay,
+            order: 0,
+            created_at: Utc::now(),
         };
 
-        Entity::insert(active_model)
-            .exec_without_returning(db)
-            .await?;
+        let trigger_value = serde_json::to_value(&model.trigger)?;
+        let outcome_value = serde_json::to_value(&model.outcome)?;
 
-        let model = Self::get_by_id(db, id)
-            .await?
-            .context("model was not inserted")?;
+        let (sql, values) = Query::insert()
+            .into_table(EventsTable)
+            .columns(EventModel::columns())
+            .values_panic([
+                model.id.into(),
+                model.enabled.into(),
+                model.name.clone().into(),
+                model.trigger_type.to_string().into(),
+                trigger_value.into(),
+                outcome_value.into(),
+                model.require_role.to_string().into(),
+                model.outcome_delay.into(),
+                model.order.into(),
+                model.created_at.into(),
+            ])
+            .build_sqlx(SqliteQueryBuilder);
+
+        sqlx::query_with(&sql, values).execute(db).await?;
 
         Ok(model)
     }
 
-    /// Find the most recent execution of this event
-    pub async fn last_execution<C>(
-        &self,
-        db: &C,
-        offset: u64,
-    ) -> DbResult<Option<EventExecutionModel>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        self.find_related(super::event_executions::Entity)
-            .order_by_desc(EventExecutionColumn::CreatedAt)
-            .offset(offset)
-            .one(db)
-            .await
+    /// Find a specific event by ID
+    pub async fn get_by_id(db: &DbPool, id: Uuid) -> DbResult<Option<EventModel>> {
+        let (sql, values) = Query::select()
+            .columns(EventModel::columns())
+            .from(EventsTable)
+            .and_where(Expr::col(EventsColumn::Id).eq(id))
+            .build_sqlx(SqliteQueryBuilder);
+        let result = sqlx::query_as_with(&sql, values).fetch_optional(db).await?;
+        Ok(result)
     }
 
-    /// Find a specific event by ID
-    pub async fn get_by_id<C>(db: &C, id: Uuid) -> DbResult<Option<Self>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        Entity::find_by_id(id).one(db).await
+    /// Find the most recent execution of this event
+    pub async fn last_execution(
+        &self,
+        db: &DbPool,
+        offset: u64,
+    ) -> DbResult<Option<EventExecutionModel>> {
+        let (sql, values) = Query::select()
+            .from(EventExecutionsTable)
+            .columns([
+                EventExecutionsColumn::Id,
+                EventExecutionsColumn::EventId,
+                EventExecutionsColumn::Metadata,
+                EventExecutionsColumn::CreatedAt,
+            ])
+            .and_where(Expr::col(EventExecutionsColumn::EventId).eq(self.id))
+            .offset(offset)
+            .order_by(EventExecutionsColumn::CreatedAt, Order::Desc)
+            .build_sqlx(SqliteQueryBuilder);
+
+        let value: Option<EventExecutionModel> =
+            sqlx::query_as_with(&sql, values).fetch_optional(db).await?;
+        Ok(value)
     }
 
     /// Find a specific event by a specific trigger type
     ///
     /// Filters to only events marked as enabled
-    pub async fn get_by_trigger_type<C>(
-        db: &C,
+    pub async fn get_by_trigger_type(
+        db: &DbPool,
         trigger_type: EventTriggerType,
-    ) -> DbResult<Vec<Self>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        Entity::find()
-            .filter(
-                Column::TriggerType
-                    .eq(trigger_type)
-                    .and(Column::Enabled.eq(true)),
-            )
-            .all(db)
-            .await
+    ) -> DbResult<Vec<Self>> {
+        let (sql, values) = Query::select()
+            .columns(EventModel::columns())
+            .from(EventsTable)
+            .and_where(Expr::col(EventsColumn::TriggerType).eq(trigger_type.to_string()))
+            .and_where(Expr::col(EventsColumn::Enabled).eq(true))
+            .order_by_columns([
+                (EventsColumn::Order, Order::Asc),
+                (EventsColumn::CreatedAt, Order::Desc),
+            ])
+            .build_sqlx(SqliteQueryBuilder);
+        let result = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
+        Ok(result)
     }
 
     /// Find all events
-    pub async fn all<C>(db: &C) -> DbResult<Vec<Self>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        Entity::find()
-            .order_by_asc(Column::Order)
-            .order_by_desc(Column::CreatedAt)
-            .all(db)
-            .await
+    pub async fn all(db: &DbPool) -> DbResult<Vec<Self>> {
+        let (sql, values) = Query::select()
+            .columns(EventModel::columns())
+            .from(EventsTable)
+            .order_by_columns([
+                (EventsColumn::Order, Order::Asc),
+                (EventsColumn::CreatedAt, Order::Desc),
+            ])
+            .build_sqlx(SqliteQueryBuilder);
+        let result = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
+        Ok(result)
     }
 
     /// Update the current event
-    pub async fn update<C>(self, db: &C, data: UpdateEvent) -> DbResult<Self>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        let mut this = self.into_active_model();
+    pub async fn update(&mut self, db: &DbPool, data: UpdateEvent) -> anyhow::Result<()> {
+        let mut update = Query::update();
+        update.table(EventsTable);
 
-        this.enabled = data.enabled.map(Set).unwrap_or(this.enabled);
-        this.name = data.name.map(Set).unwrap_or(this.name);
-        this.trigger_type = data
-            .trigger
-            .as_ref()
-            .map(EventTriggerType::from_event_trigger)
-            .map(Set)
-            .unwrap_or(this.trigger_type);
-        this.trigger = data.trigger.map(Set).unwrap_or(this.trigger);
-        this.outcome = data.outcome.map(Set).unwrap_or(this.outcome);
-        this.cooldown = data.cooldown.map(Set).unwrap_or(this.cooldown);
-        this.require_role = data.require_role.map(Set).unwrap_or(this.require_role);
-        this.outcome_delay = data.outcome_delay.map(Set).unwrap_or(this.outcome_delay);
-        this.order = data.order.map(Set).unwrap_or(this.order);
+        if let Some(enabled) = data.enabled {
+            self.enabled = enabled;
+            update.value(EventsColumn::Enabled, Expr::value(enabled));
+        }
 
-        let this = this.update(db).await?;
-        Ok(this)
-    }
+        if let Some(name) = data.name {
+            self.name = name.clone();
+            update.value(EventsColumn::Name, Expr::value(name));
+        }
 
-    pub async fn update_order<C>(db: &C, data: Vec<UpdateOrdering>) -> DbResult<()>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        data.chunks(1000)
-            .map(|order_chunk| -> BoxFuture<'_, DbResult<UpdateResult>> {
-                let mut case = CaseStatement::new()
-                    // Use the current column value when not specified
-                    .finally(Expr::col(Column::Order));
+        if let Some(trigger) = data.trigger {
+            self.trigger_type = EventTriggerType::from_event_trigger(&trigger);
+            self.trigger = trigger;
 
-                // Add case for all updated values
-                for order in order_chunk {
-                    case = case.case(Expr::col(Column::Id).eq(order.id), Expr::value(order.order));
-                }
+            let trigger_value = serde_json::to_value(&self.trigger)?;
+            update.value(EventsColumn::Trigger, Expr::value(trigger_value));
+        }
 
-                Box::pin(
-                    Entity::update_many()
-                        .col_expr(Column::Order, case.into())
-                        .exec(db),
-                )
-            })
-            .collect::<FuturesUnordered<BoxFuture<'_, DbResult<UpdateResult>>>>()
-            .try_collect::<Vec<UpdateResult>>()
-            .await?;
+        if let Some(outcome) = data.outcome {
+            self.outcome = outcome;
+
+            let outcome_value = serde_json::to_value(&self.outcome)?;
+            update.value(EventsColumn::Outcome, Expr::value(outcome_value));
+        }
+
+        if let Some(cooldown) = data.cooldown {
+            self.cooldown = cooldown;
+
+            let cooldown_value = serde_json::to_value(&self.cooldown)?;
+            update.value(EventsColumn::Cooldown, Expr::value(cooldown_value));
+        }
+
+        if let Some(require_role) = data.require_role {
+            self.require_role = require_role;
+            update.value(
+                EventsColumn::RequireRole,
+                Expr::value(require_role.to_string()),
+            );
+        }
+
+        if let Some(outcome_delay) = data.outcome_delay {
+            self.outcome_delay = outcome_delay;
+            update.value(EventsColumn::OutcomeDelay, Expr::value(outcome_delay));
+        }
+
+        if let Some(order) = data.order {
+            self.order = order;
+            update.value(EventsColumn::Order, Expr::value(order));
+        }
+
+        let (sql, values) = update.build_sqlx(SqliteQueryBuilder);
+        sqlx::query_with(&sql, values).execute(db).await?;
 
         Ok(())
     }
 
-    pub async fn get_executions<C>(
+    pub async fn update_order(db: &DbPool, data: Vec<UpdateOrdering>) -> DbResult<()> {
+        for order_chunk in data.chunks(1000) {
+            let mut case = CaseStatement::new()
+                // Use the current column value when not specified
+                .finally(Expr::col(EventsColumn::Order));
+
+            // Add case for all updated values
+            for order in order_chunk {
+                case = case.case(
+                    Expr::col(EventsColumn::Id).eq(order.id),
+                    Expr::value(order.order),
+                );
+            }
+
+            let (sql, values) = Query::update()
+                .table(EventsTable)
+                .value(EventsColumn::Order, case)
+                .build_sqlx(SqliteQueryBuilder);
+
+            sqlx::query_with(&sql, values).execute(db).await?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn get_executions(
         &self,
-        db: &C,
+        db: &DbPool,
         query: ExecutionsQuery,
-    ) -> DbResult<Vec<EventExecutionModel>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        let mut select = self.find_related(super::event_executions::Entity);
+    ) -> DbResult<Vec<EventExecutionModel>> {
+        let mut select = Query::select();
+        select
+            .from(EventExecutionsTable)
+            .columns([
+                EventExecutionsColumn::Id,
+                EventExecutionsColumn::EventId,
+                EventExecutionsColumn::Metadata,
+                EventExecutionsColumn::CreatedAt,
+            ])
+            .and_where(Expr::col(EventExecutionsColumn::EventId).eq(self.id))
+            .order_by(EventExecutionsColumn::CreatedAt, Order::Desc);
 
         if let Some(start_date) = query.start_date {
-            select = select.filter(EventExecutionColumn::CreatedAt.gt(start_date))
+            select.and_where(Expr::col(EventExecutionsColumn::CreatedAt).gt(start_date));
         }
 
         if let Some(end_date) = query.end_date {
-            select = select.filter(EventExecutionColumn::CreatedAt.lt(end_date))
+            select.and_where(Expr::col(EventExecutionsColumn::CreatedAt).lt(end_date));
         }
 
         if let Some(offset) = query.offset {
-            select = select.offset(offset);
+            select.offset(offset);
         }
 
         if let Some(limit) = query.limit {
-            select = select.limit(limit);
+            select.limit(limit);
         }
 
-        select
-            .order_by(EventExecutionColumn::CreatedAt, sea_orm::Order::Desc)
-            .all(db)
-            .await
+        let (sql, values) = select.build_sqlx(SqliteQueryBuilder);
+        let results = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
+        Ok(results)
     }
 
-    pub async fn get_logs<C>(&self, db: &C, query: LogsQuery) -> DbResult<Vec<EventLogsModel>>
-    where
-        C: ConnectionTrait + Send + 'static,
-    {
-        let mut select = self.find_related(super::event_logs::Entity);
+    pub async fn get_logs(&self, db: &DbPool, query: LogsQuery) -> DbResult<Vec<EventLogsModel>> {
+        let mut select = Query::select();
+        select
+            .from(EventLogsTable)
+            .columns([
+                EventLogsColumn::Id,
+                EventLogsColumn::EventId,
+                EventLogsColumn::Level,
+                EventLogsColumn::Message,
+                EventLogsColumn::CreatedAt,
+            ])
+            .and_where(Expr::col(EventLogsColumn::EventId).eq(self.id))
+            .order_by(EventLogsColumn::CreatedAt, Order::Desc);
 
         if let Some(level) = query.level {
-            select = select.filter(EventLogsColumn::Level.eq(level))
+            select.and_where(Expr::col(EventLogsColumn::Level).eq(level as i32));
         }
 
         if let Some(start_date) = query.start_date {
-            select = select.filter(EventLogsColumn::CreatedAt.gt(start_date))
+            select.and_where(Expr::col(EventLogsColumn::CreatedAt).gt(start_date));
         }
 
         if let Some(end_date) = query.end_date {
-            select = select.filter(EventLogsColumn::CreatedAt.lt(end_date))
+            select.and_where(Expr::col(EventLogsColumn::CreatedAt).lt(end_date));
         }
 
         if let Some(offset) = query.offset {
-            select = select.offset(offset);
+            select.offset(offset);
         }
 
         if let Some(limit) = query.limit {
-            select = select.limit(limit);
+            select.limit(limit);
         }
 
-        select
-            .order_by(EventLogsColumn::CreatedAt, sea_orm::Order::Desc)
-            .all(db)
-            .await
+        let (sql, values) = select.build_sqlx(SqliteQueryBuilder);
+        let results = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
+        Ok(results)
     }
+
+    /// Create a new script
+    pub async fn create_log(db: &DbPool, create: CreateEventLog) -> DbResult<()> {
+        let id = Uuid::new_v4();
+
+        let (sql, values) = Query::insert()
+            .into_table(EventLogsTable)
+            .columns([
+                EventLogsColumn::Id,
+                EventLogsColumn::EventId,
+                EventLogsColumn::Level,
+                EventLogsColumn::Message,
+                EventLogsColumn::CreatedAt,
+            ])
+            .values_panic([
+                id.into(),
+                create.event_id.into(),
+                (create.level as i32).into(),
+                create.message.to_string().into(),
+                create.created_at.into(),
+            ])
+            .build_sqlx(SqliteQueryBuilder);
+
+        sqlx::query_with(&sql, values).execute(db).await?;
+
+        Ok(())
+    }
+
+    /// Create a new script
+    pub async fn create_execution(
+        db: &DbPool,
+        create: CreateEventExecution,
+    ) -> anyhow::Result<EventExecutionModel> {
+        let id = Uuid::new_v4();
+        let model = EventExecutionModel {
+            id,
+            event_id: create.event_id,
+            metadata: create.metadata,
+            created_at: create.created_at,
+        };
+
+        let metadata_value = serde_json::to_value(&model.metadata)?;
+
+        let (sql, values) = Query::insert()
+            .into_table(EventExecutionsTable)
+            .columns([
+                EventExecutionsColumn::Id,
+                EventExecutionsColumn::EventId,
+                EventExecutionsColumn::Metadata,
+                EventExecutionsColumn::CreatedAt,
+            ])
+            .values_panic([
+                model.id.into(),
+                model.event_id.into(),
+                metadata_value.into(),
+                model.created_at.into(),
+            ])
+            .build_sqlx(SqliteQueryBuilder);
+
+        sqlx::query_with(&sql, values).execute(db).await?;
+
+        Ok(model)
+    }
+
+    pub async fn delete_executions_before(db: &DbPool, start_date: DateTime<Utc>) -> DbResult<()> {
+        let (sql, values) = Query::delete()
+            .from_table(EventExecutionsTable)
+            .and_where(Expr::col(EventExecutionsColumn::CreatedAt).lt(start_date))
+            .build_sqlx(SqliteQueryBuilder);
+        sqlx::query_with(&sql, values).execute(db).await?;
+        Ok(())
+    }
+
+    pub async fn delete_many_executions(db: &DbPool, ids: &[Uuid]) -> DbResult<()> {
+        let (sql, values) = Query::delete()
+            .from_table(EventExecutionsTable)
+            .and_where(Expr::col(EventExecutionsColumn::Id).is_in(ids.iter().copied()))
+            .build_sqlx(SqliteQueryBuilder);
+        sqlx::query_with(&sql, values).execute(db).await?;
+        Ok(())
+    }
+
+    pub async fn delete_many_logs(db: &DbPool, ids: &[Uuid]) -> DbResult<()> {
+        let (sql, values) = Query::delete()
+            .from_table(EventLogsTable)
+            .and_where(Expr::col(EventLogsColumn::Id).is_in(ids.iter().copied()))
+            .build_sqlx(SqliteQueryBuilder);
+        sqlx::query_with(&sql, values).execute(db).await?;
+        Ok(())
+    }
+
+    pub async fn delete_logs_before(db: &DbPool, start_date: DateTime<Utc>) -> DbResult<()> {
+        let (sql, values) = Query::delete()
+            .from_table(EventLogsTable)
+            .and_where(Expr::col(EventLogsColumn::CreatedAt).lt(start_date))
+            .build_sqlx(SqliteQueryBuilder);
+        sqlx::query_with(&sql, values).execute(db).await?;
+        Ok(())
+    }
+
+    pub async fn get_logs_estimate_size(db: &DbPool) -> DbResult<u32> {
+        #[derive(Default, FromRow)]
+        struct PartialModel {
+            total_message_length: Option<u32>,
+        }
+
+        let (sql, values) = Query::select()
+            .from(EventLogsTable)
+            .expr_as(
+                Func::sum(Func::char_length(Expr::col(EventLogsColumn::Message))),
+                Alias::new("total_message_length"),
+            )
+            .build_sqlx(SqliteQueryBuilder);
+
+        let result: PartialModel = sqlx::query_as_with(&sql, values).fetch_one(db).await?;
+        Ok(result.total_message_length.unwrap_or_default())
+    }
+
+    pub async fn get_executions_estimate_size(db: &DbPool) -> DbResult<u32> {
+        #[derive(Default, FromRow)]
+        struct PartialModel {
+            total_message_length: Option<u32>,
+        }
+
+        let (sql, values) = Query::select()
+            .from(EventExecutionsTable)
+            .expr_as(
+                Func::sum(Func::char_length(Expr::col(
+                    EventExecutionsColumn::Metadata,
+                ))),
+                Alias::new("total_message_length"),
+            )
+            .build_sqlx(SqliteQueryBuilder);
+
+        let result: PartialModel = sqlx::query_as_with(&sql, values).fetch_one(db).await?;
+        Ok(result.total_message_length.unwrap_or_default())
+    }
+
+    pub async fn delete(self, db: &DbPool) -> DbResult<()> {
+        let (sql, values) = Query::delete()
+            .from_table(EventsTable)
+            .and_where(Expr::col(EventsColumn::Id).eq(self.id))
+            .build_sqlx(SqliteQueryBuilder);
+        sqlx::query_with(&sql, values).execute(db).await?;
+        Ok(())
+    }
+}
+
+#[derive(IdenStatic, Copy, Clone)]
+#[iden(rename = "events")]
+pub struct EventsTable;
+
+#[derive(IdenStatic, Copy, Clone)]
+pub enum EventsColumn {
+    Id,
+    Enabled,
+    Name,
+    TriggerType,
+    Trigger,
+    Outcome,
+    Cooldown,
+    RequireRole,
+    OutcomeDelay,
+    Order,
+    CreatedAt,
+}
+
+#[derive(IdenStatic, Copy, Clone)]
+#[iden(rename = "event_logs")]
+pub struct EventLogsTable;
+
+#[derive(IdenStatic, Copy, Clone)]
+pub enum EventLogsColumn {
+    Id,
+    EventId,
+    Level,
+    Message,
+    CreatedAt,
+}
+
+#[derive(IdenStatic, Copy, Clone)]
+#[iden(rename = "event_executions")]
+pub struct EventExecutionsTable;
+
+#[derive(IdenStatic, Copy, Clone)]
+pub enum EventExecutionsColumn {
+    Id,
+    EventId,
+    Metadata,
+    CreatedAt,
 }

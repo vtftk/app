@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    database::entity::{items::ItemModel, items_sounds::SoundType, sounds::SoundModel},
+    database::entity::{items::ItemModel, sounds::SoundModel},
     overlay::{OverlayMessage, PartialItemModel},
     script::runtime::ScriptRuntimeData,
 };
@@ -47,23 +47,11 @@ pub async fn op_vtftk_get_items_by_names(
         ItemModel::get_by_names_with_sounds(&db, &names, ignore_case)
             .await?
             .into_iter()
-            .map(|(item, sounds)| {
-                let mut impact_sound_ids = Vec::new();
-                let mut windup_sound_ids = Vec::new();
-
-                for sound in sounds {
-                    match sound.sound_type {
-                        SoundType::Impact => impact_sound_ids.push(sound.sound_id),
-                        SoundType::Windup => windup_sound_ids.push(sound.sound_id),
-                    }
-                }
-
-                PartialItemModel {
-                    id: item.id,
-                    config: item.config,
-                    impact_sound_ids,
-                    windup_sound_ids,
-                }
+            .map(|item| PartialItemModel {
+                id: item.item.id,
+                config: item.item.config,
+                impact_sound_ids: item.impact_sounds_ids,
+                windup_sound_ids: item.windup_sounds_ids,
             })
             .collect();
 
@@ -86,23 +74,11 @@ pub async fn op_vtftk_get_items_by_ids(
     let items: Vec<PartialItemModel> = ItemModel::get_by_ids_with_sounds(&db, &ids)
         .await?
         .into_iter()
-        .map(|(item, sounds)| {
-            let mut impact_sound_ids = Vec::new();
-            let mut windup_sound_ids = Vec::new();
-
-            for sound in sounds {
-                match sound.sound_type {
-                    SoundType::Impact => impact_sound_ids.push(sound.sound_id),
-                    SoundType::Windup => windup_sound_ids.push(sound.sound_id),
-                }
-            }
-
-            PartialItemModel {
-                id: item.id,
-                config: item.config,
-                impact_sound_ids,
-                windup_sound_ids,
-            }
+        .map(|item| PartialItemModel {
+            id: item.item.id,
+            config: item.item.config,
+            impact_sound_ids: item.impact_sounds_ids,
+            windup_sound_ids: item.windup_sounds_ids,
         })
         .collect();
 
