@@ -89,8 +89,8 @@
           duration: windup.duration,
         },
       },
-      impactSoundIds: config.impact_sounds,
-      windupSoundIds: config.windup_sounds,
+      impactSoundIds: config.impact_sounds_ids,
+      windupSoundIds: config.impact_sounds_ids,
     };
   }
 

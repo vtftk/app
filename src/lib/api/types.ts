@@ -23,8 +23,8 @@ export type Item = {
 };
 
 export type ItemWithImpactSounds = Item & {
-  impact_sounds: SoundId[];
-  windup_sounds: SoundId[];
+  impact_sounds_ids: SoundId[];
+  windup_sounds_ids: SoundId[];
 };
 
 // File types for file uploads
