@@ -90,7 +90,7 @@
         },
       },
       impactSoundIds: config.impact_sounds_ids,
-      windupSoundIds: config.impact_sounds_ids,
+      windupSoundIds: config.windup_sounds_ids,
     };
   }
 
