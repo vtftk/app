@@ -140,7 +140,17 @@ impl CommandModel {
 
         let (sql, values) = Query::insert()
             .into_table(CommandsTable)
-            .columns(CommandModel::columns())
+            .columns([
+                CommandsColumn::Id,
+                CommandsColumn::Enabled,
+                CommandsColumn::Name,
+                CommandsColumn::Command,
+                CommandsColumn::Outcome,
+                CommandsColumn::Cooldown,
+                CommandsColumn::RequireRole,
+                CommandsColumn::Order,
+                CommandsColumn::CreatedAt,
+            ])
             .values_panic([
                 model.id.into(),
                 model.enabled.into(),

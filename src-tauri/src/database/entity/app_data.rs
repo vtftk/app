@@ -133,15 +133,15 @@ pub struct TwitchConfig {
 pub struct ThrowablesConfig {
     /// Duration in milliseconds that a thrown object should spend
     /// being thrown
-    pub duration: f32,
+    pub duration: u32,
     /// Range of speed a thrown object can have
-    pub spin_speed: MinMax<f32>,
+    pub spin_speed: MinMax<u32>,
     /// Range of angles an object can be thrown at
     pub throw_angle: MinMax<f32>,
     /// Which direction objects should come from
     pub direction: ThrowDirection,
     /// Delay in milliseconds before impacts show up
-    pub impact_delay: f32,
+    pub impact_delay: u32,
     /// Item scale, range relative to the scale of the model
     pub item_scale: MinMax<f32>,
 }
@@ -149,17 +149,14 @@ pub struct ThrowablesConfig {
 impl Default for ThrowablesConfig {
     fn default() -> Self {
         Self {
-            duration: 1000.,
-            spin_speed: MinMax {
-                min: 300.,
-                max: 750.,
-            },
+            duration: 1000,
+            spin_speed: MinMax { min: 300, max: 750 },
             throw_angle: MinMax {
                 min: -45.,
                 max: 45.,
             },
             direction: ThrowDirection::default(),
-            impact_delay: 100.,
+            impact_delay: 100,
             item_scale: MinMax { min: 0.25, max: 3. },
         }
     }
@@ -205,7 +202,7 @@ pub struct MinMax<T> {
 pub struct ModelConfig {
     /// Time in seconds the model will take to return to its
     /// original position in milliseconds
-    pub model_return_time: f32,
+    pub model_return_time: u32,
 
     /// How eyes should react when the model is hit by a throwable
     pub eyes_on_hit: EyesMode,
@@ -214,7 +211,7 @@ pub struct ModelConfig {
 impl Default for ModelConfig {
     fn default() -> Self {
         Self {
-            model_return_time: 300.,
+            model_return_time: 300,
             eyes_on_hit: EyesMode::default(),
         }
     }
