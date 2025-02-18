@@ -104,6 +104,7 @@ impl CommandExecutionModel {
                 ])
                 .and_where(Expr::col(CommandExecutionsColumn::CommandId).eq(command_id))
                 .offset(offset)
+                .limit(1)
                 .order_by(CommandExecutionsColumn::CreatedAt, Order::Desc),
         )
         .await

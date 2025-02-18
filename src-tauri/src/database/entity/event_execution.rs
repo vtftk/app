@@ -102,6 +102,7 @@ impl EventExecutionModel {
                 ])
                 .and_where(Expr::col(EventExecutionsColumn::EventId).eq(event_id))
                 .offset(offset)
+                .limit(1)
                 .order_by(EventExecutionsColumn::CreatedAt, Order::Desc),
         )
         .await
