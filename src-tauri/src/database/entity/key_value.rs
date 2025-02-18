@@ -13,6 +13,7 @@ pub struct KeyValueModel {
     /// Key for the key value pair
     pub key: String,
     #[serde(rename = "type")]
+    #[sqlx(rename = "type")]
     pub ty: KeyValueType,
     pub value: String,
 }
