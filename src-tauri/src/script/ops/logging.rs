@@ -17,16 +17,6 @@ use crate::{
     script::runtime::{RuntimeExecutionContext, ScriptRuntimeDataExt},
 };
 
-fn exec_prefix(ctx: Option<&RuntimeExecutionContext>) -> String {
-    match ctx {
-        Some(ctx) => match ctx {
-            RuntimeExecutionContext::Event { event_id } => format!("[event:{event_id}]"),
-            RuntimeExecutionContext::Command { command_id } => format!("[command:{command_id}]"),
-        },
-        None => "[unknown]".to_string(),
-    }
-}
-
 #[op2]
 pub fn op_log(
     state: Rc<RefCell<OpState>>,
@@ -36,7 +26,13 @@ pub fn op_log(
 ) -> anyhow::Result<()> {
     let db = state.db()?;
 
-    let prefix = exec_prefix(ctx.as_ref());
+    let prefix = match ctx {
+        Some(ctx) => match ctx {
+            RuntimeExecutionContext::Event { event_id } => format!("[event:{event_id}]"),
+            RuntimeExecutionContext::Command { command_id } => format!("[command:{command_id}]"),
+        },
+        None => "[unknown]".to_string(),
+    };
 
     let log_level = match &level {
         LoggingLevelDb::Debug => log::Level::Debug,
