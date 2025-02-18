@@ -106,11 +106,7 @@ export type VEvent = {
   id: EventId;
   name: string;
   enabled: boolean;
-  trigger: EventTrigger;
-  outcome: EventOutcome;
-  cooldown: VEventCooldown;
-  require_role: MinimumRequiredRole;
-  outcome_delay: number;
+  config: EventConfig;
   order: number;
 };
 
@@ -123,6 +119,10 @@ export type VEventCooldown = {
 export type CreateEvent = {
   name: string;
   enabled: boolean;
+  config: EventConfig;
+};
+
+export type EventConfig = {
   trigger: EventTrigger;
   outcome: EventOutcome;
   cooldown: VEventCooldown;
@@ -135,11 +135,7 @@ export type UpdateEvent = {
   update: Partial<{
     name: string;
     enabled: boolean;
-    trigger: EventTrigger;
-    outcome: EventOutcome;
-    cooldown: VEventCooldown;
-    require_role: MinimumRequiredRole;
-    outcome_delay: number;
+    config: EventConfig;
     order: number;
   }>;
 };

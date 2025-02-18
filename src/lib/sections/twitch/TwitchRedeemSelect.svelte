@@ -5,7 +5,7 @@
   import { refreshRedeemsList, createGetRedeemsList } from "$lib/api/twitch";
 
   type Props = {
-    id: string;
+    id?: string;
     name: string;
     label: string;
     description?: string;
@@ -16,8 +16,14 @@
     onChangeSelected: (value: any) => void;
   };
 
-  const { id, label, name, description, selected, onChangeSelected }: Props =
-    $props();
+  const {
+    label,
+    name,
+    id = name,
+    description,
+    selected,
+    onChangeSelected,
+  }: Props = $props();
 
   const redeemsList = createGetRedeemsList();
 

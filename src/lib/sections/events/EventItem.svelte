@@ -111,89 +111,89 @@
   </div>
 
   <div class="event__detail">
-    {#if config.trigger.type === EventTriggerType.Redeem}
+    {#if config.config.trigger.type === EventTriggerType.Redeem}
       <div class="detail" data-color="purple">
         <SolarBoltCircleBoldDuotone />
         Redeem
       </div>
-    {:else if config.trigger.type === EventTriggerType.Command}
+    {:else if config.config.trigger.type === EventTriggerType.Command}
       <div class="detail" data-color="red">
         <SolarTextSquareBoldDuotone />
         Command
       </div>
-    {:else if config.trigger.type === EventTriggerType.Follow}
+    {:else if config.config.trigger.type === EventTriggerType.Follow}
       <div class="detail" data-color="yellow">
         <SolarUsersGroupRoundedBoldDuotone />
         Follow
       </div>
-    {:else if config.trigger.type === EventTriggerType.Subscription}
+    {:else if config.config.trigger.type === EventTriggerType.Subscription}
       <div class="detail" data-color="green">
         <SolarUsersGroupRoundedBoldDuotone />
         Subscription
       </div>
-    {:else if config.trigger.type === EventTriggerType.GiftedSubscription}
+    {:else if config.config.trigger.type === EventTriggerType.GiftedSubscription}
       <div class="detail" data-color="blue">
         <SolarGiftBoldDuotone />
         Gifted Subscription
       </div>
-    {:else if config.trigger.type === EventTriggerType.Bits}
+    {:else if config.config.trigger.type === EventTriggerType.Bits}
       <div class="detail" data-color="purple">
         <SolarHandMoneyBoldDuotone />
         Gifted Bits
       </div>
-    {:else if config.trigger.type === EventTriggerType.Raid}
+    {:else if config.config.trigger.type === EventTriggerType.Raid}
       <div class="detail" data-color="red">
         <SolarSkateboardingBoldDuotone />
         Raid
       </div>
-    {:else if config.trigger.type === EventTriggerType.Timer}
+    {:else if config.config.trigger.type === EventTriggerType.Timer}
       <div class="detail" data-color="green">
         <SolarStopwatchBoldDuotone />
         Timer
       </div>
-    {:else if config.trigger.type === EventTriggerType.AdBreakBegin}
+    {:else if config.config.trigger.type === EventTriggerType.AdBreakBegin}
       <div class="detail" data-color="blue">
         <SolarMoneyBagBoldDuotone />
         Ad Break Started
       </div>
-    {:else if config.trigger.type === EventTriggerType.ShoutoutReceive}
+    {:else if config.config.trigger.type === EventTriggerType.ShoutoutReceive}
       <div class="detail" data-color="purple">
         <SolarHandHeartBoldDuotone />
         Shoutout Received
       </div>
     {/if}
 
-    {#if config.outcome.type === EventOutcomeType.ThrowBits}
+    {#if config.config.outcome.type === EventOutcomeType.ThrowBits}
       <div class="detail" data-color="green">
         <SolarHandMoneyBoldDuotone />
         Throw Bits
       </div>
-    {:else if config.outcome.type === EventOutcomeType.ChannelEmotes}
+    {:else if config.config.outcome.type === EventOutcomeType.ChannelEmotes}
       <div class="detail" data-color="yellow">
         <SolarEmojiFunnyCircleBoldDuotone />
         Channel Emotes
       </div>
-    {:else if config.outcome.type === EventOutcomeType.Throwable}
+    {:else if config.config.outcome.type === EventOutcomeType.Throwable}
       <div class="detail" data-color="purple">
         <SolarBasketballBoldDuotone />
         Throw Item
       </div>
-    {:else if config.outcome.type === EventOutcomeType.TriggerHotkey}
+    {:else if config.config.outcome.type === EventOutcomeType.TriggerHotkey}
       <div class="detail" data-color="red">
         <SolarKeyboardBoldDuotone />
         Trigger Hotkey
       </div>
-    {:else if config.outcome.type === EventOutcomeType.PlaySound}
+    {:else if config.config.outcome.type === EventOutcomeType.PlaySound}
       <div class="detail" data-color="yellow">
         <SolarHeadphonesRoundSoundBoldDuotone />
         Play Sound
       </div>
-    {:else if config.outcome.type === EventOutcomeType.SendChatMessage}
+    {:else if config.config.outcome.type === EventOutcomeType.SendChatMessage}
       <div class="detail" data-color="green">
         <SolarChatSquareCodeBoldDuotone />
         Send chat message
       </div>
-    {:else if config.outcome.type === EventOutcomeType.Script}
+    {:else if config.config.outcome.type === EventOutcomeType.Script}
       <div class="detail" data-color="purple">
         <SolarCodeSquareBoldDuotone />
         Run script

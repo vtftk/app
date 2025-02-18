@@ -30,7 +30,7 @@ pub async fn produce_outcome_message(
     event: EventModel,
     event_data: EventData,
 ) -> anyhow::Result<Option<OverlayMessage>> {
-    match event.outcome {
+    match event.config.outcome {
         EventOutcome::ThrowBits(data) => throw_bits_outcome(db, event_data, data).await.map(Some),
         EventOutcome::Throwable(data) => throwable_outcome(db, event_data, data).await.map(Some),
         EventOutcome::TriggerHotkey(data) => trigger_hotkey_outcome(data).map(Some),

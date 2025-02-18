@@ -380,7 +380,7 @@ pub async fn is_event_cooldown_elapsed(
     user: Option<&TwitchEventUser>,
     current_time: DateTime<Utc>,
 ) -> anyhow::Result<bool> {
-    let cooldown = &event.cooldown;
+    let cooldown = &event.config.cooldown;
 
     // No cooldown enabled
     if !cooldown.enabled {
@@ -458,7 +458,7 @@ pub async fn execute_event(
     if !has_required_role(
         twitch,
         event_data.user.as_ref().map(|value| value.id.clone()),
-        &event.require_role,
+        &event.config.require_role,
     )
     .await
     {
@@ -485,7 +485,7 @@ pub async fn execute_event(
     };
 
     // Wait for outcome delay
-    tokio::time::sleep(Duration::from_millis(event.outcome_delay as u64)).await;
+    tokio::time::sleep(Duration::from_millis(event.config.outcome_delay as u64)).await;
 
     let event_id = event.id;
 

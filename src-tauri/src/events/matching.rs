@@ -203,7 +203,7 @@ pub async fn match_redeem_event(
         .into_iter()
         .filter(|event| {
             matches!(
-                &event.trigger,
+                &event.config.trigger,
                 EventTrigger::Redeem { reward_id } if event_reward_id.eq(reward_id)
             )
         })
@@ -250,7 +250,7 @@ pub async fn match_cheer_bits_event(
     let events = events
         .into_iter()
         .filter(|event| {
-            matches!(&event.trigger, EventTrigger::Bits { min_bits } if bits >= *min_bits as i64)
+            matches!(&event.config.trigger, EventTrigger::Bits { min_bits } if bits >= *min_bits as i64)
         })
         .collect();
 
@@ -484,7 +484,7 @@ pub async fn match_chat_event(
         // Filter events for matching command messages
         let events = events
             .into_iter()
-            .filter(|event| matches!(&event.trigger, EventTrigger::Command { message } if message.trim().to_lowercase().eq(&command_arg)))
+            .filter(|event| matches!(&event.config.trigger, EventTrigger::Command { message } if message.trim().to_lowercase().eq(&command_arg)))
             .collect();
 
         // Provide additional context to commands
@@ -552,7 +552,7 @@ pub async fn match_raid_event(
     let events = events
        .into_iter()
        .filter(|event| {
-           matches!(&event.trigger, EventTrigger::Raid { min_raiders } if raiders >= *min_raiders as i64)
+           matches!(&event.config.trigger, EventTrigger::Raid { min_raiders } if raiders >= *min_raiders as i64)
        })
        .collect();
 
@@ -613,7 +613,7 @@ pub async fn match_timer_complete_event(
         .context("requested timer event does not exist")?;
 
     // Get minimum amount of chat messages required
-    let min_chat_messages = match &event.trigger {
+    let min_chat_messages = match &event.config.trigger {
         EventTrigger::Timer {
             min_chat_messages, ..
         } => *min_chat_messages,
@@ -668,7 +668,7 @@ pub async fn match_shoutout_receive_event(
     let events = events
        .into_iter()
        .filter(|event| {
-           matches!(&event.trigger, EventTrigger::ShoutoutReceive { min_viewers } if viewers >= *min_viewers as i64)
+           matches!(&event.config.trigger, EventTrigger::ShoutoutReceive { min_viewers } if viewers >= *min_viewers as i64)
        })
        .collect();
 
@@ -702,7 +702,8 @@ mod test {
             entity::{
                 commands::{CommandModel, CommandOutcome, CreateCommand},
                 events::{
-                    CreateEvent, EventModel, EventOutcome, EventOutcomeSendChat, EventTrigger,
+                    CreateEvent, EventConfig, EventModel, EventOutcome, EventOutcomeSendChat,
+                    EventTrigger,
                 },
             },
             mock_database,
@@ -732,15 +733,17 @@ mod test {
             CreateEvent {
                 enabled: true,
                 name: "Test Event".to_string(),
-                trigger: EventTrigger::Redeem {
-                    reward_id: "test-reward".to_string(),
+                config: EventConfig {
+                    trigger: EventTrigger::Redeem {
+                        reward_id: "test-reward".to_string(),
+                    },
+                    cooldown: Default::default(),
+                    outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
+                        template: "test".to_string(),
+                    }),
+                    outcome_delay: Default::default(),
+                    require_role: Default::default(),
                 },
-                cooldown: Default::default(),
-                outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
-                    template: "test".to_string(),
-                }),
-                outcome_delay: Default::default(),
-                require_role: Default::default(),
             },
         )
         .await
@@ -818,13 +821,15 @@ mod test {
             CreateEvent {
                 enabled: true,
                 name: "Test Event".to_string(),
-                trigger: EventTrigger::Bits { min_bits: 0 },
-                cooldown: Default::default(),
-                outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
-                    template: "test".to_string(),
-                }),
-                outcome_delay: Default::default(),
-                require_role: Default::default(),
+                config: EventConfig {
+                    trigger: EventTrigger::Bits { min_bits: 0 },
+                    cooldown: Default::default(),
+                    outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
+                        template: "test".to_string(),
+                    }),
+                    outcome_delay: Default::default(),
+                    require_role: Default::default(),
+                },
             },
         )
         .await
@@ -861,13 +866,15 @@ mod test {
             CreateEvent {
                 enabled: true,
                 name: "Test Event".to_string(),
-                trigger: EventTrigger::Bits { min_bits: 500 },
-                cooldown: Default::default(),
-                outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
-                    template: "test".to_string(),
-                }),
-                outcome_delay: Default::default(),
-                require_role: Default::default(),
+                config: EventConfig {
+                    trigger: EventTrigger::Bits { min_bits: 500 },
+                    cooldown: Default::default(),
+                    outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
+                        template: "test".to_string(),
+                    }),
+                    outcome_delay: Default::default(),
+                    require_role: Default::default(),
+                },
             },
         )
         .await
@@ -922,13 +929,15 @@ mod test {
             CreateEvent {
                 enabled: true,
                 name: "Test Event".to_string(),
-                trigger: EventTrigger::Follow,
-                cooldown: Default::default(),
-                outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
-                    template: "test".to_string(),
-                }),
-                outcome_delay: Default::default(),
-                require_role: Default::default(),
+                config: EventConfig {
+                    trigger: EventTrigger::Follow,
+                    cooldown: Default::default(),
+                    outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
+                        template: "test".to_string(),
+                    }),
+                    outcome_delay: Default::default(),
+                    require_role: Default::default(),
+                },
             },
         )
         .await
@@ -978,13 +987,15 @@ mod test {
             CreateEvent {
                 enabled: true,
                 name: "Test Event".to_string(),
-                trigger: EventTrigger::Subscription,
-                cooldown: Default::default(),
-                outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
-                    template: "test".to_string(),
-                }),
-                outcome_delay: Default::default(),
-                require_role: Default::default(),
+                config: EventConfig {
+                    trigger: EventTrigger::Subscription,
+                    cooldown: Default::default(),
+                    outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
+                        template: "test".to_string(),
+                    }),
+                    outcome_delay: Default::default(),
+                    require_role: Default::default(),
+                },
             },
         )
         .await
@@ -1038,13 +1049,15 @@ mod test {
             CreateEvent {
                 enabled: true,
                 name: "Test Event".to_string(),
-                trigger: EventTrigger::GiftedSubscription,
-                cooldown: Default::default(),
-                outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
-                    template: "test".to_string(),
-                }),
-                outcome_delay: Default::default(),
-                require_role: Default::default(),
+                config: EventConfig {
+                    trigger: EventTrigger::GiftedSubscription,
+                    cooldown: Default::default(),
+                    outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
+                        template: "test".to_string(),
+                    }),
+                    outcome_delay: Default::default(),
+                    require_role: Default::default(),
+                },
             },
         )
         .await
@@ -1102,13 +1115,15 @@ mod test {
             CreateEvent {
                 enabled: true,
                 name: "Test Event".to_string(),
-                trigger: EventTrigger::Subscription,
-                cooldown: Default::default(),
-                outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
-                    template: "test".to_string(),
-                }),
-                outcome_delay: Default::default(),
-                require_role: Default::default(),
+                config: EventConfig {
+                    trigger: EventTrigger::Subscription,
+                    cooldown: Default::default(),
+                    outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
+                        template: "test".to_string(),
+                    }),
+                    outcome_delay: Default::default(),
+                    require_role: Default::default(),
+                },
             },
         )
         .await
@@ -1180,15 +1195,17 @@ mod test {
             CreateEvent {
                 enabled: true,
                 name: "Test Event".to_string(),
-                trigger: EventTrigger::Command {
-                    message: "!test".to_string(),
+                config: EventConfig {
+                    trigger: EventTrigger::Command {
+                        message: "!test".to_string(),
+                    },
+                    cooldown: Default::default(),
+                    outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
+                        template: "test".to_string(),
+                    }),
+                    outcome_delay: Default::default(),
+                    require_role: Default::default(),
                 },
-                cooldown: Default::default(),
-                outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
-                    template: "test".to_string(),
-                }),
-                outcome_delay: Default::default(),
-                require_role: Default::default(),
             },
         )
         .await
@@ -1332,15 +1349,17 @@ mod test {
             CreateEvent {
                 enabled: true,
                 name: "Test Event".to_string(),
-                trigger: EventTrigger::Command {
-                    message: "!test".to_string(),
+                config: EventConfig {
+                    trigger: EventTrigger::Command {
+                        message: "!test".to_string(),
+                    },
+                    cooldown: Default::default(),
+                    outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
+                        template: "test".to_string(),
+                    }),
+                    outcome_delay: Default::default(),
+                    require_role: Default::default(),
                 },
-                cooldown: Default::default(),
-                outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
-                    template: "test".to_string(),
-                }),
-                outcome_delay: Default::default(),
-                require_role: Default::default(),
             },
         )
         .await
@@ -1409,13 +1428,15 @@ mod test {
             CreateEvent {
                 enabled: true,
                 name: "Test Event".to_string(),
-                trigger: EventTrigger::Raid { min_raiders: 1 },
-                cooldown: Default::default(),
-                outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
-                    template: "test".to_string(),
-                }),
-                outcome_delay: Default::default(),
-                require_role: Default::default(),
+                config: EventConfig {
+                    trigger: EventTrigger::Raid { min_raiders: 1 },
+                    cooldown: Default::default(),
+                    outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
+                        template: "test".to_string(),
+                    }),
+                    outcome_delay: Default::default(),
+                    require_role: Default::default(),
+                },
             },
         )
         .await
@@ -1448,13 +1469,15 @@ mod test {
             CreateEvent {
                 enabled: true,
                 name: "Test Event".to_string(),
-                trigger: EventTrigger::Raid { min_raiders: 5 },
-                cooldown: Default::default(),
-                outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
-                    template: "test".to_string(),
-                }),
-                outcome_delay: Default::default(),
-                require_role: Default::default(),
+                config: EventConfig {
+                    trigger: EventTrigger::Raid { min_raiders: 5 },
+                    cooldown: Default::default(),
+                    outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
+                        template: "test".to_string(),
+                    }),
+                    outcome_delay: Default::default(),
+                    require_role: Default::default(),
+                },
             },
         )
         .await
@@ -1503,13 +1526,15 @@ mod test {
             CreateEvent {
                 enabled: true,
                 name: "Test Event".to_string(),
-                trigger: EventTrigger::AdBreakBegin,
-                cooldown: Default::default(),
-                outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
-                    template: "test".to_string(),
-                }),
-                outcome_delay: Default::default(),
-                require_role: Default::default(),
+                config: EventConfig {
+                    trigger: EventTrigger::AdBreakBegin,
+                    cooldown: Default::default(),
+                    outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
+                        template: "test".to_string(),
+                    }),
+                    outcome_delay: Default::default(),
+                    require_role: Default::default(),
+                },
             },
         )
         .await
@@ -1555,13 +1580,15 @@ mod test {
             CreateEvent {
                 enabled: true,
                 name: "Test Event".to_string(),
-                trigger: EventTrigger::ShoutoutReceive { min_viewers: 1 },
-                cooldown: Default::default(),
-                outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
-                    template: "test".to_string(),
-                }),
-                outcome_delay: Default::default(),
-                require_role: Default::default(),
+                config: EventConfig {
+                    trigger: EventTrigger::ShoutoutReceive { min_viewers: 1 },
+                    cooldown: Default::default(),
+                    outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
+                        template: "test".to_string(),
+                    }),
+                    outcome_delay: Default::default(),
+                    require_role: Default::default(),
+                },
             },
         )
         .await
@@ -1594,13 +1621,15 @@ mod test {
             CreateEvent {
                 enabled: true,
                 name: "Test Event".to_string(),
-                trigger: EventTrigger::ShoutoutReceive { min_viewers: 5 },
-                cooldown: Default::default(),
-                outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
-                    template: "test".to_string(),
-                }),
-                outcome_delay: Default::default(),
-                require_role: Default::default(),
+                config: EventConfig {
+                    trigger: EventTrigger::ShoutoutReceive { min_viewers: 5 },
+                    cooldown: Default::default(),
+                    outcome: EventOutcome::SendChatMessage(EventOutcomeSendChat {
+                        template: "test".to_string(),
+                    }),
+                    outcome_delay: Default::default(),
+                    require_role: Default::default(),
+                },
             },
         )
         .await

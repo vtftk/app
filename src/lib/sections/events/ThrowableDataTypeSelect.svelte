@@ -3,7 +3,7 @@
   import FormSelect from "$lib/components/form/FormSelect.svelte";
 
   type Props = {
-    id: string;
+    id?: string;
     name: string;
     label: string;
     description?: string;
@@ -12,8 +12,14 @@
     onChangeSelected: (value: ThrowableDataType) => void;
   };
 
-  const { id, name, label, description, selected, onChangeSelected }: Props =
-    $props();
+  const {
+    name,
+    id = name,
+    label,
+    description,
+    selected,
+    onChangeSelected,
+  }: Props = $props();
 
   const options = [
     {

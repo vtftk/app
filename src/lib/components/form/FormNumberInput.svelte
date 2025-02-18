@@ -4,13 +4,13 @@
   import FormErrorLabel from "./FormErrorLabel.svelte";
 
   type Props = {
-    id: string;
+    id?: string;
     name: string;
     label: string;
     description?: string;
   } & Omit<HTMLInputAttributes, "name" | "id" | "type">;
 
-  const { id, name, label, description, ...props }: Props = $props();
+  const { name, id = name, label, description, ...props }: Props = $props();
 </script>
 
 <div class="form-input">

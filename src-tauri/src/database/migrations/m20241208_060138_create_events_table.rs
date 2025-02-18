@@ -28,31 +28,14 @@ impl Migration for EventsMigration {
                     ColumnDef::new(EventsColumn::TriggerType)
                         .string()
                         .not_null()
-                        .generated(Expr::cust("json_extract(trigger, '$.type')"), true),
+                        .generated(
+                            Expr::cust("json_extract(\"config\", '$.trigger.type')"),
+                            true,
+                        ),
                 )
                 .col(
-                    ColumnDef::new(EventsColumn::Trigger)
+                    ColumnDef::new(EventsColumn::Config)
                         .json_binary()
-                        .not_null(),
-                )
-                .col(
-                    ColumnDef::new(EventsColumn::Outcome)
-                        .json_binary()
-                        .not_null(),
-                )
-                .col(
-                    ColumnDef::new(EventsColumn::Cooldown)
-                        .json_binary()
-                        .not_null(),
-                )
-                .col(
-                    ColumnDef::new(EventsColumn::RequireRole)
-                        .string()
-                        .not_null(),
-                )
-                .col(
-                    ColumnDef::new(EventsColumn::OutcomeDelay)
-                        .integer()
                         .not_null(),
                 )
                 .col(ColumnDef::new(EventsColumn::Order).integer().not_null())
@@ -93,11 +76,7 @@ pub enum EventsColumn {
     Enabled,
     Name,
     TriggerType,
-    Trigger,
-    Outcome,
-    Cooldown,
-    RequireRole,
-    OutcomeDelay,
+    Config,
     Order,
     CreatedAt,
 }

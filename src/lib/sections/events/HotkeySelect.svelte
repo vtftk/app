@@ -7,7 +7,7 @@
   import FormSelect from "$lib/components/form/FormSelect.svelte";
 
   type Props = {
-    id: string;
+    id?: string;
     name: string;
     label: string;
     description?: string;
@@ -18,8 +18,14 @@
     onChangeSelected: (value: any) => void;
   };
 
-  const { id, label, name, description, selected, onChangeSelected }: Props =
-    $props();
+  const {
+    label,
+    name,
+    id = name,
+    description,
+    selected,
+    onChangeSelected,
+  }: Props = $props();
 
   const updateHotkeys = () => {
     invoke("update_hotkeys");

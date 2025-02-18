@@ -4,7 +4,7 @@
   import FormErrorLabel from "./FormErrorLabel.svelte";
 
   type Props = {
-    id: string;
+    id?: string;
     name: string;
     label: string;
     description?: string;
@@ -14,8 +14,8 @@
   } & Omit<HTMLInputAttributes, "name" | "placeholder" | "id" | "type">;
 
   const {
-    id,
     name,
+    id = name,
     label,
     placeholder,
     description,

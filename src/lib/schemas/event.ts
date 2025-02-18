@@ -120,16 +120,20 @@ const cooldownSchema = z.object({
   per_user: z.boolean(),
 });
 
-export const eventSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  enabled: z.boolean(),
-
+const eventConfigSchema = z.object({
   trigger: eventTriggerSchema,
   outcome: eventOutcomeSchema,
-
   require_role: z.enum(MINIMUM_REQUIRED_ROLE_VALUES),
   cooldown: cooldownSchema,
   outcome_delay: z.number(),
+});
+
+export type EventConfigSchema = z.infer<typeof eventConfigSchema>;
+
+export const eventSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  enabled: z.boolean(),
+  config: eventConfigSchema,
 });
 
 export type EventSchema = z.infer<typeof eventSchema>;
@@ -343,11 +347,13 @@ export function getDefaultEvent(): EventSchema {
   return {
     name: "",
     enabled: true,
-    trigger: getEventTriggerDefault(EventTriggerType.Redeem),
-    outcome: getEventOutcomeDefault(EventOutcomeType.Throwable),
-    require_role: MinimumRequiredRole.None,
-    cooldown: { enabled: false, duration: 0, per_user: false },
-    outcome_delay: 0,
+    config: {
+      trigger: getEventTriggerDefault(EventTriggerType.Redeem),
+      outcome: getEventOutcomeDefault(EventOutcomeType.Throwable),
+      require_role: MinimumRequiredRole.None,
+      cooldown: { enabled: false, duration: 0, per_user: false },
+      outcome_delay: 0,
+    },
   };
 }
 

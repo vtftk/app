@@ -22,11 +22,7 @@ pub enum EventsColumn {
     Enabled,
     Name,
     TriggerType,
-    Trigger,
-    Outcome,
-    Cooldown,
-    RequireRole,
-    OutcomeDelay,
+    Config,
     Order,
     CreatedAt,
 }
@@ -39,24 +35,26 @@ pub struct EventModel {
     pub enabled: bool,
     /// Name of the event handler
     pub name: String,
-    /// Input that should trigger the event
     #[sqlx(json)]
+    pub config: EventConfig,
+    /// Ordering
+    pub order: u32,
+    // Date time of creation
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EventConfig {
+    /// Input that should trigger the event
     pub trigger: EventTrigger,
     /// Outcome the event should trigger
-    #[sqlx(json)]
     pub outcome: EventOutcome,
     /// Cooldown between each trigger of the even
-    #[sqlx(json)]
     pub cooldown: EventCooldown,
     /// Minimum required role to trigger the event
     pub require_role: MinimumRequireRole,
     /// Delay before executing the outcome
     pub outcome_delay: u32,
-    /// Ordering
-    pub order: u32,
-
-    // Date time of creation
-    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -270,37 +268,24 @@ pub enum EventOutcome {
 pub struct CreateEvent {
     pub enabled: bool,
     pub name: String,
-    pub trigger: EventTrigger,
-    pub outcome: EventOutcome,
-    pub cooldown: EventCooldown,
-    pub require_role: MinimumRequireRole,
-    pub outcome_delay: u32,
+    pub config: EventConfig,
 }
 
 #[derive(Default, Deserialize)]
 pub struct UpdateEvent {
     pub enabled: Option<bool>,
     pub name: Option<String>,
-    pub trigger: Option<EventTrigger>,
-    pub outcome: Option<EventOutcome>,
-    pub cooldown: Option<EventCooldown>,
-    pub require_role: Option<MinimumRequireRole>,
-    pub outcome_delay: Option<u32>,
+    pub config: Option<EventConfig>,
     pub order: Option<u32>,
 }
 
 impl EventModel {
-    fn columns() -> [EventsColumn; 11] {
+    fn columns() -> [EventsColumn; 6] {
         [
             EventsColumn::Id,
             EventsColumn::Enabled,
             EventsColumn::Name,
-            EventsColumn::TriggerType,
-            EventsColumn::Trigger,
-            EventsColumn::Outcome,
-            EventsColumn::Cooldown,
-            EventsColumn::RequireRole,
-            EventsColumn::OutcomeDelay,
+            EventsColumn::Config,
             EventsColumn::Order,
             EventsColumn::CreatedAt,
         ]
@@ -313,17 +298,12 @@ impl EventModel {
             id,
             enabled: create.enabled,
             name: create.name,
-            trigger: create.trigger,
-            outcome: create.outcome,
-            cooldown: create.cooldown,
-            require_role: create.require_role,
-            outcome_delay: create.outcome_delay,
+            config: create.config,
             order: 0,
             created_at: Utc::now(),
         };
 
-        let trigger_value = serde_json::to_value(&model.trigger)?;
-        let outcome_value = serde_json::to_value(&model.outcome)?;
+        let config_value = serde_json::to_value(&model.config)?;
 
         sql_exec(
             db,
@@ -333,11 +313,7 @@ impl EventModel {
                     EventsColumn::Id,
                     EventsColumn::Enabled,
                     EventsColumn::Name,
-                    EventsColumn::Trigger,
-                    EventsColumn::Outcome,
-                    EventsColumn::Cooldown,
-                    EventsColumn::RequireRole,
-                    EventsColumn::OutcomeDelay,
+                    EventsColumn::Config,
                     EventsColumn::Order,
                     EventsColumn::CreatedAt,
                 ])
@@ -345,10 +321,7 @@ impl EventModel {
                     model.id.into(),
                     model.enabled.into(),
                     model.name.clone().into(),
-                    trigger_value.into(),
-                    outcome_value.into(),
-                    model.require_role.to_string().into(),
-                    model.outcome_delay.into(),
+                    config_value.into(),
                     model.order.into(),
                     model.created_at.into(),
                 ]),
@@ -422,38 +395,11 @@ impl EventModel {
             update.value(EventsColumn::Name, Expr::value(name));
         }
 
-        if let Some(trigger) = data.trigger {
-            self.trigger = trigger;
+        if let Some(config) = data.config {
+            self.config = config;
 
-            let trigger_value = serde_json::to_value(&self.trigger)?;
-            update.value(EventsColumn::Trigger, Expr::value(trigger_value));
-        }
-
-        if let Some(outcome) = data.outcome {
-            self.outcome = outcome;
-
-            let outcome_value = serde_json::to_value(&self.outcome)?;
-            update.value(EventsColumn::Outcome, Expr::value(outcome_value));
-        }
-
-        if let Some(cooldown) = data.cooldown {
-            self.cooldown = cooldown;
-
-            let cooldown_value = serde_json::to_value(&self.cooldown)?;
-            update.value(EventsColumn::Cooldown, Expr::value(cooldown_value));
-        }
-
-        if let Some(require_role) = data.require_role {
-            self.require_role = require_role;
-            update.value(
-                EventsColumn::RequireRole,
-                Expr::value(require_role.to_string()),
-            );
-        }
-
-        if let Some(outcome_delay) = data.outcome_delay {
-            self.outcome_delay = outcome_delay;
-            update.value(EventsColumn::OutcomeDelay, Expr::value(outcome_delay));
+            let config_value = serde_json::to_value(&self.config)?;
+            update.value(EventsColumn::Config, Expr::value(config_value));
         }
 
         if let Some(order) = data.order {

@@ -53,7 +53,7 @@ pub async fn create_event(
     let event = EventModel::create(db, create).await?;
 
     // Update the event scheduler
-    if let EventTrigger::Timer { .. } = event.trigger {
+    if let EventTrigger::Timer { .. } = event.config.trigger {
         update_scheduler_events(db, scheduler.inner()).await;
     }
 
@@ -74,7 +74,7 @@ pub async fn update_event(
     event.update(db, update).await?;
 
     // Update the event scheduler
-    if let EventTrigger::Timer { .. } = event.trigger {
+    if let EventTrigger::Timer { .. } = event.config.trigger {
         update_scheduler_events(db, scheduler.inner()).await;
     }
 
@@ -92,7 +92,7 @@ pub async fn delete_event(
         .await?
         .context("event not found")?;
 
-    let is_timer_event = matches!(event.trigger, EventTrigger::Timer { .. });
+    let is_timer_event = matches!(event.config.trigger, EventTrigger::Timer { .. });
 
     event.delete(db).await?;
 
@@ -112,7 +112,7 @@ pub async fn update_scheduler_events(db: &DbPool, scheduler: &SchedulerHandle) {
         let scheduled = events
             .into_iter()
             .filter_map(|event| {
-                let interval = match &event.trigger {
+                let interval = match &event.config.trigger {
                     EventTrigger::Timer { interval, .. } => *interval,
                     _ => return None,
                 };
