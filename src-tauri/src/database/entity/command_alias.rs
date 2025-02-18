@@ -69,6 +69,11 @@ impl CommandAliasModel {
         )
         .await?;
 
+        // Don't try and insert if theres no data
+        if aliases.is_empty() {
+            return Ok(());
+        }
+
         // Insert new aliases
         sql_exec(
             db,

@@ -358,6 +358,11 @@ impl ItemModel {
         sound_ids: &[Uuid],
         sound_type: SoundType,
     ) -> DbResult<()> {
+        // Don't try and insert if theres no data
+        if sound_ids.is_empty() {
+            return Ok(());
+        }
+
         sql_exec(
             db,
             Query::insert()
