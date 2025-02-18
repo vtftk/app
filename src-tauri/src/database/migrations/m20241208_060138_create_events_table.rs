@@ -1,5 +1,5 @@
 use super::Migration;
-use sea_query::{ColumnDef, IdenStatic, SqliteQueryBuilder, Table};
+use sea_query::{ColumnDef, Expr, IdenStatic, Index, SqliteQueryBuilder, Table};
 
 pub struct EventsMigration;
 
@@ -22,10 +22,13 @@ impl Migration for EventsMigration {
                 )
                 .col(ColumnDef::new(EventsColumn::Enabled).boolean().not_null())
                 .col(ColumnDef::new(EventsColumn::Name).string().not_null())
+                // "trigger_type" is stored virtual column derived from the "type" discriminated union variant
+                // identifier for "trigger" used for searching based on type without needing to parse all the JSON
                 .col(
                     ColumnDef::new(EventsColumn::TriggerType)
                         .string()
-                        .not_null(),
+                        .not_null()
+                        .generated(Expr::cust("json_extract(trigger, '$.type')"), true),
                 )
                 .col(
                     ColumnDef::new(EventsColumn::Trigger)
@@ -58,6 +61,19 @@ impl Migration for EventsMigration {
                         .date_time()
                         .not_null(),
                 )
+                .build(SqliteQueryBuilder),
+        )
+        .execute(db)
+        .await?;
+
+        // When triggering events its very common to lookup events for a
+        // specific type that are enabled, so we index that
+        sqlx::query(
+            &Index::create()
+                .name("idx-events-trigger-type-enabled")
+                .table(EventsTable)
+                .col(EventsColumn::TriggerType)
+                .col(EventsColumn::Enabled)
                 .build(SqliteQueryBuilder),
         )
         .execute(db)

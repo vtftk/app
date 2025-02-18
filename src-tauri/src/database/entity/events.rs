@@ -39,10 +39,6 @@ pub struct EventModel {
     pub enabled: bool,
     /// Name of the event handler
     pub name: String,
-    /// Duplicate of the "trigger" column but just the string key to allow querying
-    /// derived from "trigger"
-    #[serde(skip)]
-    pub trigger_type: EventTriggerType,
     /// Input that should trigger the event
     #[sqlx(json)]
     pub trigger: EventTrigger,
@@ -96,23 +92,6 @@ pub enum EventTriggerType {
     Timer,
     AdBreakBegin,
     ShoutoutReceive,
-}
-
-impl EventTriggerType {
-    pub fn from_event_trigger(trigger: &EventTrigger) -> Self {
-        match trigger {
-            EventTrigger::Redeem { .. } => EventTriggerType::Redeem,
-            EventTrigger::Command { .. } => EventTriggerType::Command,
-            EventTrigger::Follow => EventTriggerType::Follow,
-            EventTrigger::Subscription => EventTriggerType::Subscription,
-            EventTrigger::GiftedSubscription => EventTriggerType::GiftedSubscription,
-            EventTrigger::Bits { .. } => EventTriggerType::Bits,
-            EventTrigger::Raid { .. } => EventTriggerType::Raid,
-            EventTrigger::Timer { .. } => EventTriggerType::Timer,
-            EventTrigger::AdBreakBegin => EventTriggerType::AdBreakBegin,
-            EventTrigger::ShoutoutReceive { .. } => EventTriggerType::ShoutoutReceive,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -334,7 +313,6 @@ impl EventModel {
             id,
             enabled: create.enabled,
             name: create.name,
-            trigger_type: EventTriggerType::from_event_trigger(&create.trigger),
             trigger: create.trigger,
             outcome: create.outcome,
             cooldown: create.cooldown,
@@ -355,7 +333,6 @@ impl EventModel {
                     EventsColumn::Id,
                     EventsColumn::Enabled,
                     EventsColumn::Name,
-                    EventsColumn::TriggerType,
                     EventsColumn::Trigger,
                     EventsColumn::Outcome,
                     EventsColumn::Cooldown,
@@ -368,7 +345,6 @@ impl EventModel {
                     model.id.into(),
                     model.enabled.into(),
                     model.name.clone().into(),
-                    model.trigger_type.to_string().into(),
                     trigger_value.into(),
                     outcome_value.into(),
                     model.require_role.to_string().into(),
@@ -447,7 +423,6 @@ impl EventModel {
         }
 
         if let Some(trigger) = data.trigger {
-            self.trigger_type = EventTriggerType::from_event_trigger(&trigger);
             self.trigger = trigger;
 
             let trigger_value = serde_json::to_value(&self.trigger)?;
