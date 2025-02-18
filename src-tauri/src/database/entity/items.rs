@@ -265,7 +265,9 @@ impl ItemModel {
     /// Update the current item
     pub async fn update(&mut self, db: &DbPool, data: UpdateItem) -> anyhow::Result<()> {
         let mut update = Query::update();
-        update.table(ItemsTable);
+        update
+            .table(ItemsTable)
+            .and_where(Expr::col(ItemsColumn::Id).eq(self.id));
 
         if let Some(name) = data.name {
             self.name = name.clone();

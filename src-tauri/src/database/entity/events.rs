@@ -383,7 +383,9 @@ impl EventModel {
     /// Update the current event
     pub async fn update(&mut self, db: &DbPool, data: UpdateEvent) -> anyhow::Result<()> {
         let mut update = Query::update();
-        update.table(EventsTable);
+        update
+            .table(EventsTable)
+            .and_where(Expr::col(EventsColumn::Id).eq(self.id));
 
         if let Some(enabled) = data.enabled {
             self.enabled = enabled;

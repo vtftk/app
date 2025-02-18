@@ -1,11 +1,13 @@
 use chrono::{DateTime, Utc};
-use sea_query::{CaseStatement, Expr, Func, IdenStatic, Order, Query, SqliteQueryBuilder};
-use sea_query_binder::SqlxBinder;
+use sea_query::{CaseStatement, Expr, Func, IdenStatic, Order, Query};
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use uuid::Uuid;
 
-use crate::database::{DbPool, DbResult};
+use crate::database::{
+    helpers::{sql_exec, sql_query_all, sql_query_maybe_one},
+    DbPool, DbResult,
+};
 
 use super::shared::UpdateOrdering;
 
@@ -98,80 +100,86 @@ impl SoundModel {
             created_at: Utc::now(),
         };
 
-        let (sql, values) = Query::insert()
-            .into_table(SoundsTable)
-            .columns(SoundModel::columns())
-            .values_panic([
-                model.id.into(),
-                model.name.clone().into(),
-                model.src.clone().into(),
-                model.volume.into(),
-                model.order.into(),
-                model.created_at.into(),
-            ])
-            .build_sqlx(SqliteQueryBuilder);
-
-        sqlx::query_with(&sql, values).execute(db).await?;
+        sql_exec(
+            db,
+            Query::insert()
+                .into_table(SoundsTable)
+                .columns(SoundModel::columns())
+                .values_panic([
+                    model.id.into(),
+                    model.name.clone().into(),
+                    model.src.clone().into(),
+                    model.volume.into(),
+                    model.order.into(),
+                    model.created_at.into(),
+                ]),
+        )
+        .await?;
 
         Ok(model)
     }
 
     /// Find a specific sound by ID
     pub async fn get_by_id(db: &DbPool, id: Uuid) -> DbResult<Option<SoundModel>> {
-        let (sql, values) = Query::select()
-            .columns(SoundModel::columns())
-            .from(SoundsTable)
-            .and_where(Expr::col(SoundsColumn::Id).eq(id))
-            .build_sqlx(SqliteQueryBuilder);
-        let result = sqlx::query_as_with(&sql, values).fetch_optional(db).await?;
-        Ok(result)
+        sql_query_maybe_one(
+            db,
+            Query::select()
+                .columns(SoundModel::columns())
+                .from(SoundsTable)
+                .and_where(Expr::col(SoundsColumn::Id).eq(id)),
+        )
+        .await
     }
 
     /// Find a specific sound by ID
     pub async fn get_by_id_partial(db: &DbPool, id: Uuid) -> DbResult<Option<PartialSoundModel>> {
-        let (sql, values) = Query::select()
-            .columns([SoundsColumn::Id, SoundsColumn::Src, SoundsColumn::Volume])
-            .from(SoundsTable)
-            .and_where(Expr::col(SoundsColumn::Id).eq(id))
-            .build_sqlx(SqliteQueryBuilder);
-        let result = sqlx::query_as_with(&sql, values).fetch_optional(db).await?;
-        Ok(result)
+        sql_query_maybe_one(
+            db,
+            Query::select()
+                .columns([SoundsColumn::Id, SoundsColumn::Src, SoundsColumn::Volume])
+                .from(SoundsTable)
+                .and_where(Expr::col(SoundsColumn::Id).eq(id)),
+        )
+        .await
     }
 
     /// Find sounds with IDs present in the provided list
     pub async fn get_by_ids(db: &DbPool, ids: &[Uuid]) -> DbResult<Vec<SoundModel>> {
-        let (sql, values) = Query::select()
-            .columns(SoundModel::columns())
-            .from(SoundsTable)
-            .and_where(Expr::col(SoundsColumn::Id).is_in(ids.iter().copied()))
-            .build_sqlx(SqliteQueryBuilder);
-        let result = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
-        Ok(result)
+        sql_query_all(
+            db,
+            Query::select()
+                .columns(SoundModel::columns())
+                .from(SoundsTable)
+                .and_where(Expr::col(SoundsColumn::Id).is_in(ids.iter().copied())),
+        )
+        .await
     }
 
     /// Find sounds with IDs present in the provided list
     pub async fn get_by_ids_partial(db: &DbPool, ids: &[Uuid]) -> DbResult<Vec<PartialSoundModel>> {
-        let (sql, values) = Query::select()
-            .columns([SoundsColumn::Id, SoundsColumn::Src, SoundsColumn::Volume])
-            .from(SoundsTable)
-            .and_where(Expr::col(SoundsColumn::Id).is_in(ids.iter().copied()))
-            .build_sqlx(SqliteQueryBuilder);
-        let result = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
-        Ok(result)
+        sql_query_all(
+            db,
+            Query::select()
+                .columns([SoundsColumn::Id, SoundsColumn::Src, SoundsColumn::Volume])
+                .from(SoundsTable)
+                .and_where(Expr::col(SoundsColumn::Id).is_in(ids.iter().copied())),
+        )
+        .await
     }
 
     /// Find all sounds
     pub async fn all(db: &DbPool) -> DbResult<Vec<SoundModel>> {
-        let (sql, values) = Query::select()
-            .columns(SoundModel::columns())
-            .from(SoundsTable)
-            .order_by_columns([
-                (SoundsColumn::Order, Order::Asc),
-                (SoundsColumn::CreatedAt, Order::Desc),
-            ])
-            .build_sqlx(SqliteQueryBuilder);
-        let result = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
-        Ok(result)
+        sql_query_all(
+            db,
+            Query::select()
+                .columns(SoundModel::columns())
+                .from(SoundsTable)
+                .order_by_columns([
+                    (SoundsColumn::Order, Order::Asc),
+                    (SoundsColumn::CreatedAt, Order::Desc),
+                ]),
+        )
+        .await
     }
 
     /// Find all sounds with a matching name, optionally ignoring case
@@ -195,15 +203,15 @@ impl SoundModel {
             select.and_where(Expr::col(SoundsColumn::Name).is_in(names));
         };
 
-        let (sql, values) = select.build_sqlx(SqliteQueryBuilder);
-        let sounds = sqlx::query_as_with(&sql, values).fetch_all(db).await?;
-        Ok(sounds)
+        sql_query_all(db, &select).await
     }
 
     /// Update the current sound
     pub async fn update(&mut self, db: &DbPool, data: UpdateSound) -> DbResult<()> {
         let mut update = Query::update();
-        update.table(SoundsTable);
+        update
+            .table(SoundsTable)
+            .and_where(Expr::col(SoundsColumn::Id).eq(self.id));
 
         if let Some(name) = data.name {
             self.name = name.clone();
@@ -225,10 +233,7 @@ impl SoundModel {
             update.value(SoundsColumn::Order, Expr::value(order));
         }
 
-        let (sql, values) = update.build_sqlx(SqliteQueryBuilder);
-        sqlx::query_with(&sql, values).execute(db).await?;
-
-        Ok(())
+        sql_exec(db, &update).await
     }
 
     pub async fn update_order(db: &DbPool, data: Vec<UpdateOrdering>) -> DbResult<()> {
@@ -245,23 +250,25 @@ impl SoundModel {
                 );
             }
 
-            let (sql, values) = Query::update()
-                .table(SoundsTable)
-                .value(SoundsColumn::Order, case)
-                .build_sqlx(SqliteQueryBuilder);
-
-            sqlx::query_with(&sql, values).execute(db).await?;
+            sql_exec(
+                db,
+                Query::update()
+                    .table(SoundsTable)
+                    .value(SoundsColumn::Order, case),
+            )
+            .await?;
         }
 
         Ok(())
     }
 
     pub async fn delete(self, db: &DbPool) -> DbResult<()> {
-        let (sql, values) = Query::delete()
-            .from_table(SoundsTable)
-            .and_where(Expr::col(SoundsColumn::Id).eq(self.id))
-            .build_sqlx(SqliteQueryBuilder);
-        sqlx::query_with(&sql, values).execute(db).await?;
-        Ok(())
+        sql_exec(
+            db,
+            Query::delete()
+                .from_table(SoundsTable)
+                .and_where(Expr::col(SoundsColumn::Id).eq(self.id)),
+        )
+        .await
     }
 }

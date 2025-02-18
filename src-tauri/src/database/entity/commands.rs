@@ -230,7 +230,9 @@ impl CommandModel {
 
     pub async fn update(&mut self, db: &DbPool, data: UpdateCommand) -> anyhow::Result<()> {
         let mut update = Query::update();
-        update.table(CommandsTable);
+        update
+            .table(CommandsTable)
+            .and_where(Expr::col(CommandsColumn::Id).eq(self.id));
 
         if let Some(enabled) = data.enabled {
             self.enabled = enabled;
