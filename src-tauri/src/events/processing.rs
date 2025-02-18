@@ -202,7 +202,7 @@ pub async fn is_command_cooldown_elapsed(
     user: &TwitchEventUser,
     current_time: DateTime<Utc>,
 ) -> anyhow::Result<bool> {
-    let cooldown = &command.cooldown;
+    let cooldown = &command.config.cooldown;
 
     // No cooldown enabled
     if !cooldown.enabled {
@@ -283,7 +283,13 @@ pub async fn execute_command(
     };
 
     // Ensure required role is present
-    if !has_required_role(twitch, Some(user.id.clone()), &command.command.require_role).await {
+    if !has_required_role(
+        twitch,
+        Some(user.id.clone()),
+        &command.command.config.require_role,
+    )
+    .await
+    {
         debug!("skipping command: missing required role");
         return Ok(());
     }
@@ -305,7 +311,7 @@ pub async fn execute_command(
         )],
     };
 
-    match command.command.outcome {
+    match command.command.config.outcome {
         CommandOutcome::Template { message } => {
             let to_usr = command
                 .args

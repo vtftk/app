@@ -700,7 +700,7 @@ mod test {
     use crate::{
         database::{
             entity::{
-                commands::{CommandModel, CommandOutcome, CreateCommand},
+                commands::{CommandConfig, CommandModel, CommandOutcome, CreateCommand},
                 events::{
                     CreateEvent, EventConfig, EventModel, EventOutcome, EventOutcomeSendChat,
                     EventTrigger,
@@ -1249,11 +1249,14 @@ mod test {
                 enabled: true,
                 name: "Test Event".to_string(),
                 command: "!test".to_string(),
-                outcome: CommandOutcome::Template {
-                    message: "test".to_string(),
+                config: CommandConfig {
+                    outcome: CommandOutcome::Template {
+                        message: "test".to_string(),
+                    },
+                    cooldown: Default::default(),
+                    require_role: Default::default(),
                 },
-                cooldown: Default::default(),
-                require_role: Default::default(),
+
                 aliases: Vec::new(),
             },
         )
@@ -1301,11 +1304,13 @@ mod test {
                 enabled: true,
                 name: "Test Event".to_string(),
                 command: "!test".to_string(),
-                outcome: CommandOutcome::Template {
-                    message: "test".to_string(),
+                config: CommandConfig {
+                    outcome: CommandOutcome::Template {
+                        message: "test".to_string(),
+                    },
+                    cooldown: Default::default(),
+                    require_role: Default::default(),
                 },
-                cooldown: Default::default(),
-                require_role: Default::default(),
                 aliases: Vec::new(),
             },
         )

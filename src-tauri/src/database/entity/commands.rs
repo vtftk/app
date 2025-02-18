@@ -7,11 +7,7 @@ use crate::database::{
     DbPool, DbResult,
 };
 use chrono::{DateTime, Utc};
-use sea_query::{
-    Alias, CaseStatement, Condition, Expr, Func, IdenStatic, JoinType, Order, Query,
-    SqliteQueryBuilder,
-};
-use sea_query_binder::SqlxBinder;
+use sea_query::{CaseStatement, Condition, Expr, IdenStatic, Order, Query};
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use uuid::Uuid;
@@ -26,18 +22,23 @@ pub struct CommandModel {
     pub name: String,
     /// The command to trigger when entered
     pub command: String,
-    /// The outcome of the command
+    /// Configuration for the command
     #[sqlx(json)]
-    pub outcome: CommandOutcome,
-    /// Cooldown between each trigger of the command
-    #[sqlx(json)]
-    pub cooldown: CommandCooldown,
-    /// Minimum required role to trigger the command
-    pub require_role: MinimumRequireRole,
+    pub config: CommandConfig,
     /// Ordering
     pub order: u32,
     // Date time of creation
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommandConfig {
+    /// The outcome of the command
+    pub outcome: CommandOutcome,
+    /// Cooldown between each trigger of the command
+    pub cooldown: CommandCooldown,
+    /// Minimum required role to trigger the command
+    pub require_role: MinimumRequireRole,
 }
 
 #[derive(IdenStatic, Copy, Clone)]
@@ -50,9 +51,7 @@ pub enum CommandsColumn {
     Enabled,
     Name,
     Command,
-    Outcome,
-    Cooldown,
-    RequireRole,
+    Config,
     Order,
     CreatedAt,
 }
@@ -87,9 +86,7 @@ pub struct CreateCommand {
     pub enabled: bool,
     pub name: String,
     pub command: String,
-    pub outcome: CommandOutcome,
-    pub cooldown: CommandCooldown,
-    pub require_role: MinimumRequireRole,
+    pub config: CommandConfig,
     pub aliases: Vec<String>,
 }
 
@@ -98,23 +95,19 @@ pub struct UpdateCommand {
     pub enabled: Option<bool>,
     pub name: Option<String>,
     pub command: Option<String>,
-    pub outcome: Option<CommandOutcome>,
-    pub cooldown: Option<CommandCooldown>,
-    pub require_role: Option<MinimumRequireRole>,
+    pub config: Option<CommandConfig>,
     pub order: Option<u32>,
     pub aliases: Option<Vec<String>>,
 }
 
 impl CommandModel {
-    pub fn columns() -> [CommandsColumn; 9] {
+    pub fn columns() -> [CommandsColumn; 7] {
         [
             CommandsColumn::Id,
             CommandsColumn::Enabled,
             CommandsColumn::Name,
             CommandsColumn::Command,
-            CommandsColumn::Outcome,
-            CommandsColumn::Cooldown,
-            CommandsColumn::RequireRole,
+            CommandsColumn::Config,
             CommandsColumn::Order,
             CommandsColumn::CreatedAt,
         ]
@@ -127,44 +120,38 @@ impl CommandModel {
             id,
             enabled: create.enabled,
             name: create.name,
-            command: create.command,
-            outcome: create.outcome,
-            cooldown: create.cooldown,
-            require_role: create.require_role,
+            command: create.command.to_lowercase(),
+            config: create.config,
             order: 0,
             created_at: Utc::now(),
         };
 
-        let cooldown_value = serde_json::to_value(&model.cooldown)?;
-        let outcome_value = serde_json::to_value(&model.outcome)?;
+        let config_value = serde_json::to_value(&model.config)?;
 
-        let (sql, values) = Query::insert()
-            .into_table(CommandsTable)
-            .columns([
-                CommandsColumn::Id,
-                CommandsColumn::Enabled,
-                CommandsColumn::Name,
-                CommandsColumn::Command,
-                CommandsColumn::Outcome,
-                CommandsColumn::Cooldown,
-                CommandsColumn::RequireRole,
-                CommandsColumn::Order,
-                CommandsColumn::CreatedAt,
-            ])
-            .values_panic([
-                model.id.into(),
-                model.enabled.into(),
-                model.name.clone().into(),
-                model.command.to_string().into(),
-                outcome_value.into(),
-                cooldown_value.into(),
-                model.require_role.to_string().into(),
-                model.order.into(),
-                model.created_at.into(),
-            ])
-            .build_sqlx(SqliteQueryBuilder);
-
-        sqlx::query_with(&sql, values).execute(db).await?;
+        sql_exec(
+            db,
+            Query::insert()
+                .into_table(CommandsTable)
+                .columns([
+                    CommandsColumn::Id,
+                    CommandsColumn::Enabled,
+                    CommandsColumn::Name,
+                    CommandsColumn::Command,
+                    CommandsColumn::Config,
+                    CommandsColumn::Order,
+                    CommandsColumn::CreatedAt,
+                ])
+                .values_panic([
+                    model.id.into(),
+                    model.enabled.into(),
+                    model.name.clone().into(),
+                    model.command.to_string().into(),
+                    config_value.into(),
+                    model.order.into(),
+                    model.created_at.into(),
+                ]),
+        )
+        .await?;
 
         // Set the command aliases
         CommandAliasModel::set_aliases(db, id, create.aliases).await?;
@@ -179,26 +166,27 @@ impl CommandModel {
             db,
             Query::select()
                 .from(CommandsTable)
-                .columns(CommandModel::columns())
-                .join_as(
-                    JoinType::LeftJoin,
+                .columns([
+                    (CommandsTable, CommandsColumn::Id),
+                    (CommandsTable, CommandsColumn::Enabled),
+                    (CommandsTable, CommandsColumn::Name),
+                    (CommandsTable, CommandsColumn::Command),
+                    (CommandsTable, CommandsColumn::Config),
+                    (CommandsTable, CommandsColumn::Order),
+                    (CommandsTable, CommandsColumn::CreatedAt),
+                ])
+                .left_join(
                     CommandAliasTable,
-                    Alias::new("alias"),
                     Expr::col((CommandsTable, CommandsColumn::Id))
                         .equals((CommandAliasTable, CommandAliasColumn::CommandId)),
                 )
+                .and_where(Expr::col((CommandsTable, CommandsColumn::Enabled)).eq(true))
                 .cond_where(
                     Condition::any()
-                        .add(
-                            Expr::expr(Func::lower(Expr::col(CommandsColumn::Command))).eq(command),
-                        )
-                        .add(
-                            Expr::expr(Func::lower(Expr::col(CommandAliasColumn::Alias)))
-                                .eq(command),
-                        ),
+                        .add(Expr::col((CommandsTable, CommandsColumn::Command)).eq(command))
+                        .add(Expr::col((CommandAliasTable, CommandAliasColumn::Alias)).eq(command)),
                 )
-                .and_where(Expr::col(CommandsColumn::Enabled).eq(true))
-                .group_by_col(CommandsColumn::Id),
+                .group_by_col((CommandsTable, CommandsColumn::Id)),
         )
         .await
     }
@@ -249,26 +237,11 @@ impl CommandModel {
             update.value(CommandsColumn::Command, Expr::value(command));
         }
 
-        if let Some(outcome) = data.outcome {
-            self.outcome = outcome;
+        if let Some(config) = data.config {
+            self.config = config;
 
-            let outcome_value = serde_json::to_value(&self.outcome)?;
-            update.value(CommandsColumn::Outcome, Expr::value(outcome_value));
-        }
-
-        if let Some(cooldown) = data.cooldown {
-            self.cooldown = cooldown;
-
-            let cooldown_value = serde_json::to_value(&self.cooldown)?;
-            update.value(CommandsColumn::Cooldown, Expr::value(cooldown_value));
-        }
-
-        if let Some(require_role) = data.require_role {
-            self.require_role = require_role;
-            update.value(
-                CommandsColumn::RequireRole,
-                Expr::value(require_role.to_string()),
-            );
+            let config_value = serde_json::to_value(&self.config)?;
+            update.value(CommandsColumn::Config, Expr::value(config_value));
         }
 
         if let Some(order) = data.order {

@@ -2,7 +2,9 @@ use super::{
     m20241208_060200_create_commands_table::{CommandsColumn, CommandsTable},
     Migration,
 };
-use sea_query::{ColumnDef, ForeignKey, ForeignKeyAction, IdenStatic, SqliteQueryBuilder, Table};
+use sea_query::{
+    ColumnDef, ForeignKey, ForeignKeyAction, IdenStatic, Index, SqliteQueryBuilder, Table,
+};
 
 pub struct CommandAliasesMigration;
 
@@ -47,6 +49,17 @@ impl Migration for CommandAliasesMigration {
                         .on_delete(ForeignKeyAction::Cascade)
                         .on_update(ForeignKeyAction::Cascade),
                 )
+                .build(SqliteQueryBuilder),
+        )
+        .execute(db)
+        .await?;
+
+        // Index alias itself
+        sqlx::query(
+            &Index::create()
+                .name("idx-command-alias")
+                .table(CommandsTable)
+                .col(CommandAliasColumn::Alias)
                 .build(SqliteQueryBuilder),
         )
         .execute(db)

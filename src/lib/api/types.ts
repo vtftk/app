@@ -56,9 +56,7 @@ export type Command = {
   enabled: boolean;
   name: string;
   command: string;
-  outcome: CommandOutcome;
-  cooldown: CommandCooldown;
-  require_role: MinimumRequiredRole;
+  config: CommandConfig;
   order: number;
 };
 
@@ -76,10 +74,14 @@ export type CreateCommand = {
   enabled: boolean;
   name: string;
   command: string;
+  config: CommandConfig;
+  aliases: string[];
+};
+
+export type CommandConfig = {
   outcome: CommandOutcome;
   cooldown: CommandCooldown;
   require_role: MinimumRequiredRole;
-  aliases: string[];
 };
 
 export type UpdateCommand = {
@@ -88,9 +90,7 @@ export type UpdateCommand = {
     enabled: boolean;
     name: string;
     command: string;
-    outcome: CommandOutcome;
-    cooldown: CommandCooldown;
-    require_role: MinimumRequiredRole;
+    config: CommandConfig;
     order: number;
     aliases: string[];
   }>;

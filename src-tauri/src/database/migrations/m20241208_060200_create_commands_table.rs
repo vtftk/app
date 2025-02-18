@@ -1,5 +1,5 @@
 use super::Migration;
-use sea_query::{ColumnDef, IdenStatic, SqliteQueryBuilder, Table};
+use sea_query::{ColumnDef, IdenStatic, Index, SqliteQueryBuilder, Table};
 
 pub struct CommandsMigration;
 
@@ -24,18 +24,8 @@ impl Migration for CommandsMigration {
                 .col(ColumnDef::new(CommandsColumn::Name).string().not_null())
                 .col(ColumnDef::new(CommandsColumn::Command).text().not_null())
                 .col(
-                    ColumnDef::new(CommandsColumn::Outcome)
+                    ColumnDef::new(CommandsColumn::Config)
                         .json_binary()
-                        .not_null(),
-                )
-                .col(
-                    ColumnDef::new(CommandsColumn::Cooldown)
-                        .json_binary()
-                        .not_null(),
-                )
-                .col(
-                    ColumnDef::new(CommandsColumn::RequireRole)
-                        .string()
                         .not_null(),
                 )
                 .col(ColumnDef::new(CommandsColumn::Order).integer().not_null())
@@ -44,6 +34,28 @@ impl Migration for CommandsMigration {
                         .date_time()
                         .not_null(),
                 )
+                .build(SqliteQueryBuilder),
+        )
+        .execute(db)
+        .await?;
+
+        // Index enabled commands
+        sqlx::query(
+            &Index::create()
+                .name("idx-command-enabled")
+                .table(CommandsTable)
+                .col(CommandsColumn::Enabled)
+                .build(SqliteQueryBuilder),
+        )
+        .execute(db)
+        .await?;
+
+        // Index command itself
+        sqlx::query(
+            &Index::create()
+                .name("idx-command-command")
+                .table(CommandsTable)
+                .col(CommandsColumn::Command)
                 .build(SqliteQueryBuilder),
         )
         .execute(db)
@@ -63,9 +75,7 @@ pub enum CommandsColumn {
     Enabled,
     Name,
     Command,
-    Outcome,
-    Cooldown,
-    RequireRole,
+    Config,
     Order,
     CreatedAt,
 }

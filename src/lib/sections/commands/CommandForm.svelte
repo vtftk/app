@@ -103,9 +103,9 @@ return message;
       name: config.name,
       command: config.command,
       enabled: config.enabled,
-      outcome: config.outcome,
-      require_role: config.require_role,
-      cooldown: config.cooldown,
+      outcome: config.config.outcome,
+      require_role: config.config.require_role,
+      cooldown: config.config.cooldown,
       aliases: config.aliases.length < 1 ? [""] : config.aliases,
     };
   }
@@ -170,9 +170,11 @@ return message;
           enabled: values.enabled,
           name: values.name,
           command,
-          outcome: values.outcome,
-          cooldown: values.cooldown,
-          require_role: values.require_role,
+          config: {
+            outcome: values.outcome,
+            cooldown: values.cooldown,
+            require_role: values.require_role,
+          },
           aliases,
         },
       });
@@ -181,9 +183,11 @@ return message;
         enabled: values.enabled,
         name: values.name,
         command,
-        outcome: values.outcome,
-        cooldown: values.cooldown,
-        require_role: values.require_role,
+        config: {
+          outcome: values.outcome,
+          cooldown: values.cooldown,
+          require_role: values.require_role,
+        },
         aliases,
       });
     }
