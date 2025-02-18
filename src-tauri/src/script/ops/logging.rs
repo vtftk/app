@@ -14,7 +14,7 @@ use crate::{
         event_log::{CreateEventLog, EventLogsModel},
         shared::LoggingLevelDb,
     },
-    script::runtime::{RuntimeExecutionContext, ScriptRuntimeData},
+    script::runtime::{RuntimeExecutionContext, ScriptRuntimeDataExt},
 };
 
 fn exec_prefix(ctx: Option<&RuntimeExecutionContext>) -> String {
@@ -33,12 +33,8 @@ pub fn op_log(
     #[serde] ctx: Option<RuntimeExecutionContext>,
     #[serde] level: LoggingLevelDb,
     #[string] message: String,
-) {
-    let db = {
-        let state = state.borrow();
-        let data = state.borrow::<ScriptRuntimeData>();
-        data.db.clone()
-    };
+) -> anyhow::Result<()> {
+    let db = state.db()?;
 
     let prefix = exec_prefix(ctx.as_ref());
 
@@ -55,9 +51,9 @@ pub fn op_log(
         let created_at = Utc::now();
 
         tokio::spawn(async move {
-            match ctx {
+            let result = match ctx {
                 RuntimeExecutionContext::Event { event_id } => {
-                    if let Err(err) = EventLogsModel::create(
+                    EventLogsModel::create(
                         &db,
                         CreateEventLog {
                             event_id,
@@ -67,12 +63,9 @@ pub fn op_log(
                         },
                     )
                     .await
-                    {
-                        error!("failed to persist script log: {:?}", err);
-                    }
                 }
                 RuntimeExecutionContext::Command { command_id } => {
-                    if let Err(err) = CommandLogsModel::create(
+                    CommandLogsModel::create(
                         &db,
                         CreateCommandLog {
                             command_id,
@@ -82,11 +75,14 @@ pub fn op_log(
                         },
                     )
                     .await
-                    {
-                        error!("failed to persist command log: {:?}", err);
-                    }
                 }
             };
+
+            if let Err(err) = result {
+                error!("failed to persist log: {:?}", err);
+            }
         });
     }
+
+    Ok(())
 }

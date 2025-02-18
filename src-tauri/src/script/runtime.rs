@@ -19,10 +19,10 @@ use anyhow::Context;
 use deno_core::{
     serde_v8::to_v8,
     v8::{self, Global, Local},
-    JsRuntime, PollEventLoopOptions, RuntimeOptions,
+    JsRuntime, OpState, PollEventLoopOptions, RuntimeOptions,
 };
 use serde::{Deserialize, Serialize};
-use std::{future::Future, path::PathBuf, pin::Pin, rc::Rc, task::Poll};
+use std::{cell::RefCell, future::Future, path::PathBuf, pin::Pin, rc::Rc, task::Poll};
 use tokio::{
     sync::{mpsc, oneshot},
     task::LocalSet,
@@ -444,4 +444,32 @@ fn execute_script(
         .context("function provided no return value")?;
 
     Ok(Global::new(scope, result))
+}
+
+/// Helper extension to extract script runtime fields
+/// from the shared OpState ref
+pub trait ScriptRuntimeDataExt {
+    fn overlay_sender(&self) -> anyhow::Result<OverlayMessageSender>;
+    fn db(&self) -> anyhow::Result<DbPool>;
+    fn twitch(&self) -> anyhow::Result<Twitch>;
+}
+
+impl ScriptRuntimeDataExt for Rc<RefCell<OpState>> {
+    fn overlay_sender(&self) -> anyhow::Result<OverlayMessageSender> {
+        let state = self.try_borrow()?;
+        let data = state.borrow::<ScriptRuntimeData>();
+        Ok(data.overlay_sender.clone())
+    }
+
+    fn db(&self) -> anyhow::Result<DbPool> {
+        let state = self.try_borrow()?;
+        let data = state.borrow::<ScriptRuntimeData>();
+        Ok(data.db.clone())
+    }
+
+    fn twitch(&self) -> anyhow::Result<Twitch> {
+        let state = self.try_borrow()?;
+        let data = state.borrow::<ScriptRuntimeData>();
+        Ok(data.twitch.clone())
+    }
 }

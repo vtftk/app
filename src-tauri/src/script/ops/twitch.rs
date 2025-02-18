@@ -1,4 +1,4 @@
-use crate::{script::runtime::ScriptRuntimeData, twitch::manager::TWITCH_CLIENT_ID};
+use crate::{script::runtime::ScriptRuntimeDataExt, twitch::manager::TWITCH_CLIENT_ID};
 use deno_core::*;
 use serde::Serialize;
 use std::{cell::RefCell, rc::Rc};
@@ -20,12 +20,7 @@ pub struct TwitchCredentials {
 pub async fn op_twitch_get_credentials(
     state: Rc<RefCell<OpState>>,
 ) -> anyhow::Result<Option<TwitchCredentials>> {
-    let twitch = {
-        let state = state.borrow();
-        let data = state.borrow::<ScriptRuntimeData>();
-        data.twitch.clone()
-    };
-
+    let twitch = state.twitch()?;
     let token = match twitch.get_user_token().await {
         Some(value) => value,
         None => return Ok(None),
