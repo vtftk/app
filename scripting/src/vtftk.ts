@@ -207,7 +207,7 @@ export interface ItemModel {
   /**
    * Configuration for the item image
    */
-  image: ItemImageConfig;
+  config: ItemConfig;
   /**
    * Order of the item within the UI
    */
