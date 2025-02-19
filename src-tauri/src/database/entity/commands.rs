@@ -144,8 +144,8 @@ impl CommandModel {
                 .values_panic([
                     model.id.into(),
                     model.enabled.into(),
-                    model.name.clone().into(),
-                    model.command.to_string().into(),
+                    model.name.as_str().into(),
+                    model.command.as_str().into(),
                     config_value.into(),
                     model.order.into(),
                     model.created_at.into(),

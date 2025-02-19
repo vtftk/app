@@ -162,7 +162,7 @@ async fn create_applied_migration(
     let (query, values) = Query::insert()
         .columns([MigrationsColumn::Name, MigrationsColumn::AppliedAt])
         .into_table(MigrationsTable)
-        .values_panic([name.to_string().into(), applied_at.into()])
+        .values_panic([name.as_str().into(), applied_at.into()])
         .build_sqlx(SqliteQueryBuilder);
 
     sqlx::query_with(&query, values).execute(db).await?;

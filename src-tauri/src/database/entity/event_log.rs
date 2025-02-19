@@ -65,8 +65,8 @@ impl EventLogsModel {
                 .values_panic([
                     id.into(),
                     create.event_id.into(),
-                    (create.level as i32).into(),
-                    create.message.to_string().into(),
+                    create.level.into(),
+                    create.message.into(),
                     create.created_at.into(),
                 ]),
         )
@@ -109,12 +109,8 @@ impl EventLogsModel {
             )
             .order_by(EventLogsColumn::CreatedAt, Order::Desc);
 
-        if let Some(offset) = query.offset {
-            select.offset(offset);
-        }
-
-        if let Some(limit) = query.limit {
-            select.limit(limit);
+        if let (Some(offset), Some(limit)) = (query.offset, query.limit) {
+            select.offset(offset).limit(limit);
         }
 
         sql_query_all(db, &select).await

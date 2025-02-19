@@ -1,4 +1,4 @@
-use sea_query::{Expr, IdenStatic, OnConflict, Query};
+use sea_query::{Expr, IdenStatic, OnConflict, Query, Value};
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use strum::{Display, EnumString};
@@ -31,6 +31,13 @@ pub enum KeyValueType {
     Array,
 }
 
+impl From<KeyValueType> for Value {
+    fn from(x: KeyValueType) -> Value {
+        let string: String = x.to_string();
+        Value::String(Some(Box::new(string)))
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CreateKeyValue {
     pub key: String,
@@ -51,11 +58,7 @@ impl KeyValueModel {
                     KeyValueColumn::Value,
                     KeyValueColumn::Type,
                 ])
-                .values_panic([
-                    create.key.into(),
-                    create.value.into(),
-                    create.ty.to_string().into(),
-                ])
+                .values_panic([create.key.into(), create.value.into(), create.ty.into()])
                 .on_conflict(
                     OnConflict::column(KeyValueColumn::Key)
                         .update_columns([KeyValueColumn::Value, KeyValueColumn::Type])

@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use sea_query::{CaseStatement, Expr, IdenStatic, Order, Query};
+use sea_query::{CaseStatement, Expr, IdenStatic, Order, Query, Value};
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use strum::{Display, EnumString};
@@ -90,6 +90,13 @@ pub enum EventTriggerType {
     Timer,
     AdBreakBegin,
     ShoutoutReceive,
+}
+
+impl From<EventTriggerType> for Value {
+    fn from(x: EventTriggerType) -> Value {
+        let string: String = x.to_string();
+        Value::String(Some(Box::new(string)))
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -355,7 +362,7 @@ impl EventModel {
             Query::select()
                 .columns(EventModel::columns())
                 .from(EventsTable)
-                .and_where(Expr::col(EventsColumn::TriggerType).eq(trigger_type.to_string()))
+                .and_where(Expr::col(EventsColumn::TriggerType).eq(trigger_type))
                 .and_where(Expr::col(EventsColumn::Enabled).eq(true))
                 .order_by_columns([
                     (EventsColumn::Order, Order::Asc),

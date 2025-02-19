@@ -136,12 +136,8 @@ impl EventExecutionModel {
             )
             .order_by(EventExecutionsColumn::CreatedAt, Order::Desc);
 
-        if let Some(offset) = query.offset {
-            select.offset(offset);
-        }
-
-        if let Some(limit) = query.limit {
-            select.limit(limit);
+        if let (Some(offset), Some(limit)) = (query.offset, query.limit) {
+            select.offset(offset).limit(limit);
         }
 
         sql_query_all(db, &select).await

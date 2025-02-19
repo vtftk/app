@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use sea_query::Value;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -27,6 +28,13 @@ pub enum LoggingLevelDb {
     Info = 1,
     Warn = 2,
     Error = 3,
+}
+
+impl From<LoggingLevelDb> for Value {
+    fn from(x: LoggingLevelDb) -> Value {
+        let value: i32 = x as i32;
+        Value::Int(Some(value))
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
