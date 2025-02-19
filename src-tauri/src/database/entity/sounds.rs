@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use sea_query::{CaseStatement, Expr, Func, IdenStatic, Order, Query};
+use sea_query::{CaseStatement, Expr, Func, IdenStatic, Order, Query, Value};
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use uuid::Uuid;
@@ -31,6 +31,13 @@ pub enum SoundsColumn {
 pub enum SoundType {
     Impact,
     Windup,
+}
+
+impl From<SoundType> for Value {
+    fn from(x: SoundType) -> Value {
+        let string: String = x.to_string();
+        Value::String(Some(Box::new(string)))
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]

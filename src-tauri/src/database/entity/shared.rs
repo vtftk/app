@@ -1,9 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use strum::{Display, EnumString};
 use uuid::Uuid;
 
-#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, EnumString, Display, sqlx::Type)]
+#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize)]
 pub enum MinimumRequireRole {
     #[default]
     None,

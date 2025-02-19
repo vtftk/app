@@ -342,7 +342,7 @@ impl ItemModel {
                 .and_where(
                     Expr::col(ItemsSoundsColumn::SoundId).is_not_in(sound_ids.iter().copied()),
                 )
-                .and_where(Expr::col(ItemsSoundsColumn::SoundType).eq(sound_type.to_string())),
+                .and_where(Expr::col(ItemsSoundsColumn::SoundType).eq(sound_type)),
         )
         .await?;
 
@@ -371,13 +371,12 @@ impl ItemModel {
                     ItemsSoundsColumn::SoundId,
                     ItemsSoundsColumn::SoundType,
                 ])
-                .values_from_panic(sound_ids.iter().map(|sound_id| {
-                    [
-                        self.id.into(),
-                        (*sound_id).into(),
-                        sound_type.to_string().into(),
-                    ]
-                }))
+                .values_from_panic(
+                    sound_ids
+                        .iter()
+                        .copied()
+                        .map(|sound_id| [self.id.into(), sound_id.into(), sound_type.into()]),
+                )
                 .on_conflict(
                     OnConflict::columns([
                         ItemsSoundsColumn::ItemId,
