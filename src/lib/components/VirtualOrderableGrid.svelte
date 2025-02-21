@@ -257,10 +257,11 @@
     right: 0;
     bottom: 0;
     visibility: visible;
-    border: 3px dashed #444;
-    background: #212121;
+    border: 3px dashed #999;
+    background: #666;
     opacity: 0.5;
     margin: 0;
+    border-radius: 5px;
   }
 
   .wrapper {

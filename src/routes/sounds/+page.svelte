@@ -9,11 +9,11 @@
   import SoundItem from "$lib/sections/sounds/SoundItem.svelte";
   import { createSelection } from "$lib/utils/selection.svelte";
   import PageLayoutList from "$lib/layouts/PageLayoutList.svelte";
-  import OrderableGrid from "$lib/components/OrderableGrid.svelte";
   import LinkButton from "$lib/components/input/LinkButton.svelte";
   import SearchInput from "$lib/components/form/SearchInput.svelte";
   import PopoverButton from "$lib/components/popover/PopoverButton.svelte";
   import BulkSoundImport from "$lib/components/sounds/BulkSoundImport.svelte";
+  import VirtualOrderableGrid from "$lib/components/VirtualOrderableGrid.svelte";
   import ControlledCheckbox from "$lib/components/input/ControlledCheckbox.svelte";
   import { confirmDialog } from "$lib/components/dialog/GlobalConfirmDialog.svelte";
   import {
@@ -92,7 +92,7 @@
     </div>
   {/snippet}
 
-  <OrderableGrid
+  <VirtualOrderableGrid
     items={filteredSounds}
     onUpdateOrder={updateSoundOrder}
     disableOrdering={search.length > 0}
@@ -104,7 +104,7 @@
         onToggleSelected={() => selection.toggle(sound.id)}
       />
     {/snippet}
-  </OrderableGrid>
+  </VirtualOrderableGrid>
 </PageLayoutList>
 
 <style>

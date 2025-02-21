@@ -9,9 +9,9 @@
   import EventItem from "$lib/sections/events/EventItem.svelte";
   import { createSelection } from "$lib/utils/selection.svelte";
   import PageLayoutList from "$lib/layouts/PageLayoutList.svelte";
-  import OrderableGrid from "$lib/components/OrderableGrid.svelte";
   import LinkButton from "$lib/components/input/LinkButton.svelte";
   import SearchInput from "$lib/components/form/SearchInput.svelte";
+  import VirtualOrderableGrid from "$lib/components/VirtualOrderableGrid.svelte";
   import ControlledCheckbox from "$lib/components/input/ControlledCheckbox.svelte";
   import { confirmDialog } from "$lib/components/dialog/GlobalConfirmDialog.svelte";
   import {
@@ -83,10 +83,11 @@
     </div>
   {/snippet}
 
-  <OrderableGrid
+  <VirtualOrderableGrid
     items={filteredEvents}
     onUpdateOrder={updateEventOrder}
     disableOrdering={search.length > 0}
+    itemHeight={110}
   >
     <!-- Snippet for rendering items within the grid -->
     {#snippet item(event: VEvent)}
@@ -96,7 +97,7 @@
         onToggleSelected={() => selection.toggle(event.id)}
       />
     {/snippet}
-  </OrderableGrid>
+  </VirtualOrderableGrid>
 </PageLayoutList>
 
 <style>
