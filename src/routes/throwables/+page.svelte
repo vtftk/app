@@ -91,8 +91,13 @@
     });
   }
 
-  function onTestThrow() {
-    const throwPromise = testThrow(selection.selection, 1);
+  /**
+   * Performs a test throw of the provided items
+   *
+   * @param itemIds The IDs of the items to throw
+   */
+  function onTestThrow(itemIds: string[]) {
+    const throwPromise = testThrow(itemIds, 1);
 
     toast.promise(throwPromise, {
       loading: "Sending throw...",
@@ -101,8 +106,8 @@
     });
   }
 
-  function onTestBarrage() {
-    const throwPromise = testThrowBarrage(selection.selection, 20, 2, 100);
+  function onTestBarrage(itemIds: string[]) {
+    const throwPromise = testThrowBarrage(itemIds, 20, 2, 100);
 
     toast.promise(throwPromise, {
       loading: "Sending barrage...",
@@ -151,11 +156,15 @@
           <BallIcon /> Test
 
           {#snippet content()}
-            <PopoverCloseButton onclick={onTestThrow}>
+            <PopoverCloseButton
+              onclick={() => onTestThrow(selection.selection)}
+            >
               <BallIcon /> Test One
             </PopoverCloseButton>
 
-            <PopoverCloseButton onclick={onTestBarrage}>
+            <PopoverCloseButton
+              onclick={() => onTestBarrage(selection.selection)}
+            >
               <BallsIcon /> Test Barrage
             </PopoverCloseButton>
           {/snippet}
@@ -189,6 +198,9 @@
         config={item}
         selected={selection.includes(item.id)}
         onToggleSelected={() => selection.toggle(item.id)}
+        {testingEnabled}
+        {onTestThrow}
+        {onTestBarrage}
       />
     {/snippet}
   </VirtualOrderableGrid>

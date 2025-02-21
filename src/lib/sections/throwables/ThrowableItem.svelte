@@ -7,21 +7,35 @@
   import SettingsIcon from "~icons/solar/settings-bold";
   import DeleteIcon from "~icons/solar/trash-bin-2-bold";
   import { deleteItemMutation } from "$lib/api/itemModel";
+  import BallsIcon from "~icons/solar/balls-bold-duotone";
   import Button from "$lib/components/input/Button.svelte";
   import SolarMenuDotsBold from "~icons/solar/menu-dots-bold";
+  import BallIcon from "~icons/solar/basketball-bold-duotone";
   import LinkButton from "$lib/components/input/LinkButton.svelte";
   import PopoverButton from "$lib/components/popover/PopoverButton.svelte";
   import ControlledCheckbox from "$lib/components/input/ControlledCheckbox.svelte";
   import { confirmDialog } from "$lib/components/dialog/GlobalConfirmDialog.svelte";
+  import PopoverCloseButton from "$lib/components/popover/PopoverCloseButton.svelte";
 
   type Props = {
     config: Item;
 
     selected?: boolean;
     onToggleSelected?: VoidFunction;
+
+    testingEnabled: boolean;
+    onTestThrow: (itemIds: string[]) => void;
+    onTestBarrage: (itemIds: string[]) => void;
   };
 
-  const { config, selected, onToggleSelected }: Props = $props();
+  const {
+    config,
+    selected,
+    onToggleSelected,
+    testingEnabled,
+    onTestThrow,
+    onTestBarrage,
+  }: Props = $props();
 
   const deleteItem = deleteItemMutation();
 
@@ -46,9 +60,24 @@
 </script>
 
 {#snippet popoverContent()}
+  <PopoverCloseButton
+    disabled={!testingEnabled}
+    onclick={() => onTestThrow([config.id])}
+  >
+    <BallIcon /> Test One
+  </PopoverCloseButton>
+
+  <PopoverCloseButton
+    disabled={!testingEnabled}
+    onclick={() => onTestBarrage([config.id])}
+  >
+    <BallsIcon /> Test Barrage
+  </PopoverCloseButton>
+
   <LinkButton href="/throwables/{config.id}">
     <SettingsIcon /> View
   </LinkButton>
+
   <Button onclick={onDelete} disabled={$deleteItem.isPending}>
     <DeleteIcon /> Delete
   </Button>
