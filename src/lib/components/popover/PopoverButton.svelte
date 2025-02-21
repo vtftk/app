@@ -52,6 +52,38 @@
               {@render content?.()}
             </div>
           {/if}
+
+          <Popover.Arrow>
+            {#snippet child({ props })}
+              <span {...props} class="arrow">
+                <svg
+                  height={12}
+                  width={24}
+                  viewBox="0 0 30 10"
+                  preserveAspectRatio="none"
+                  data-arrow=""
+                >
+                  <polygon points="0,0 30,0 15,10" fill="currentColor" />
+                  <line
+                    x1="0"
+                    y1="0"
+                    x2="15"
+                    y2="10"
+                    stroke="#333"
+                    stroke-width={1}
+                  />
+                  <line
+                    x1="30"
+                    y1="0"
+                    x2="15"
+                    y2="10"
+                    stroke="#333"
+                    stroke-width={1}
+                  />
+                </svg>
+              </span>
+            {/snippet}
+          </Popover.Arrow>
         </div>
       {/snippet}
     </Popover.Content>
@@ -62,7 +94,7 @@
   .content {
     z-index: 30;
     min-width: 12rem;
-    border-radius: 12px;
+    border-radius: 8px;
     border: 1px solid #333;
     padding: 0.5rem;
     background-color: #222;
@@ -71,5 +103,9 @@
     display: flex;
     flex-flow: column;
     gap: 0.75rem;
+  }
+
+  .arrow {
+    color: #222;
   }
 </style>
