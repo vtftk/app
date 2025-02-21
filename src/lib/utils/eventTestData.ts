@@ -78,6 +78,17 @@ export function getEventTestingData(triggerType: EventTriggerType): VEventData {
         cost: randomNumber(1, 10) * 100,
         userInput: randomArrayItem(REWARD_MESSAGES),
       };
+    case EventTriggerType.AdBreakBegin:
+      return {
+        user,
+        durationSeconds: 60,
+      };
+    case EventTriggerType.ShoutoutReceive:
+      return {
+        user,
+        viewerCount: randomNumber(10, 1000),
+      };
+
     default:
       return { user };
   }

@@ -5,11 +5,13 @@
   import DeleteIcon from "~icons/solar/trash-bin-2-bold";
   import Button from "$lib/components/input/Button.svelte";
   import SolarMenuDotsBold from "~icons/solar/menu-dots-bold";
-  import { deleteEvent, updateEvent } from "$lib/api/eventModel";
+  import BallIcon from "~icons/solar/basketball-bold-duotone";
+  import { getEventTestingData } from "$lib/utils/eventTestData";
   import LinkButton from "$lib/components/input/LinkButton.svelte";
   import SolarGiftBoldDuotone from "~icons/solar/gift-bold-duotone";
   import EnabledSwitch from "$lib/components/input/EnabledSwitch.svelte";
   import PopoverButton from "$lib/components/popover/PopoverButton.svelte";
+  import { testEvent, deleteEvent, updateEvent } from "$lib/api/eventModel";
   import SolarKeyboardBoldDuotone from "~icons/solar/keyboard-bold-duotone";
   import SolarMoneyBagBoldDuotone from "~icons/solar/money-bag-bold-duotone";
   import SolarStopwatchBoldDuotone from "~icons/solar/stopwatch-bold-duotone";
@@ -22,6 +24,7 @@
   import SolarArrowRightBoldDuotone from "~icons/solar/arrow-right-bold-duotone";
   import ControlledCheckbox from "$lib/components/input/ControlledCheckbox.svelte";
   import { confirmDialog } from "$lib/components/dialog/GlobalConfirmDialog.svelte";
+  import PopoverCloseButton from "$lib/components/popover/PopoverCloseButton.svelte";
   import SolarSkateboardingBoldDuotone from "~icons/solar/skateboarding-bold-duotone";
   import SolarChatSquareCodeBoldDuotone from "~icons/solar/chat-square-code-bold-duotone";
   import SolarEmojiFunnyCircleBoldDuotone from "~icons/solar/emoji-funny-circle-bold-duotone";
@@ -32,6 +35,7 @@
     EventTriggerType,
   } from "$lib/api/types";
   import SolarHeadphonesRoundSoundBoldDuotone from "~icons/solar/headphones-round-sound-bold-duotone";
+
   type Props = {
     config: VEvent;
 
@@ -76,9 +80,25 @@
       ),
     });
   }
+
+  function onTest() {
+    if (config === undefined) return;
+
+    const eventData = getEventTestingData(config.config.trigger.type);
+    const throwPromise = testEvent(config.id, eventData);
+
+    toast.promise(throwPromise, {
+      loading: "Running test event...",
+      success: "Tested event",
+      error: toastErrorMessage("Failed to test event"),
+    });
+  }
 </script>
 
 {#snippet popoverContent()}
+  <PopoverCloseButton type="button" onclick={onTest}>
+    <BallIcon /> Test
+  </PopoverCloseButton>
   <LinkButton href="/events/{config.id}">
     <SettingsIcon /> View
   </LinkButton>
