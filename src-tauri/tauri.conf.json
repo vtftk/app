@@ -14,7 +14,8 @@
       {
         "title": "VTuber Fun ToolKit (VTFTK)",
         "width": 1100,
-        "height": 625
+        "height": 625,
+        "dragDropEnabled": false
       }
     ],
     "security": {

@@ -243,6 +243,9 @@
           value={$data.config.image.image ?? existing?.config.image?.src}
           scale={$data.config.image.scale * 0.5}
           pixelated={$data.config.image.pixelate}
+          onChange={(file) => {
+            setFields("config.image.image", file!);
+          }}
         />
         <FormErrorLabel name="config.image.image" />
       </div>
