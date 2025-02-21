@@ -12,6 +12,7 @@
     description?: string;
     value: number;
     showTicks?: boolean;
+    oninput?: (value: number) => void;
   } & Omit<
     WithoutChildren<Omit<BitsSlider.RootProps & { type: "single" }, "type">>,
     "value" | "onValueChange"
@@ -27,6 +28,7 @@
     min,
     max,
     step,
+    oninput,
     ...restProps
   }: Props = $props();
 
@@ -46,6 +48,7 @@
         bind:ref
         {...restProps}
         onValueChange={(value) => {
+          if (oninput) oninput(value);
           onInput(value);
         }}
         {min}
@@ -64,6 +67,7 @@
       {max}
       {step}
       {value}
+      {oninput}
       aria-describedby="{name}-validation"
     />
   </div>

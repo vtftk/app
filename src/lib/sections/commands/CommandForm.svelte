@@ -370,7 +370,7 @@ return message;
         selected={$data.require_role}
         onChangeSelected={(selected) =>
           setFields("require_role", selected, true)}
-        description="Minimum required rol1e the user triggering the event must have in order for the event to trigger"
+        description="Minimum required role the user triggering the event must have in order for the event to trigger"
       />
     </FormSection>
 

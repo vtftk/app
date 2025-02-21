@@ -424,26 +424,62 @@
 
       <!-- Throw angle -->
       <div class="row">
-        <FormSlider
-          id="throwables.throw_angle.min"
-          name="throwables.throw_angle.min"
-          label="Minimum Throw Angle"
-          description="Minimum angle an item will be throw at"
-          min={-360}
-          max={360}
-          step={15}
-          value={$data.throwables.throw_angle.min}
-        />
-        <FormSlider
-          id="throwables.throw_angle.max"
-          name="throwables.throw_angle.max"
-          label="Maximum Throw Angle"
-          description="Maximum angle an item will be throw at"
-          min={-360}
-          max={360}
-          step={15}
-          value={$data.throwables.throw_angle.max}
-        />
+        <div class="column">
+          <FormSlider
+            id="throwables.throw_angle.min"
+            name="throwables.throw_angle.min"
+            label="Minimum Throw Angle"
+            description="Minimum angle an item will be throw at"
+            min={-90}
+            max={90}
+            step={1}
+            value={$data.throwables.throw_angle.min}
+            oninput={() => {
+              if (
+                $data.throwables.throw_angle.min >
+                $data.throwables.throw_angle.max
+              ) {
+                $data.throwables.throw_angle.max =
+                  $data.throwables.throw_angle.min;
+              }
+            }}
+          />
+
+          <div class="arrow-wrapper">
+            <span
+              class="arrow"
+              style={`transform: rotate(${$data.throwables.throw_angle.min}deg);`}
+            ></span>
+          </div>
+        </div>
+        <div class="column">
+          <FormSlider
+            id="throwables.throw_angle.max"
+            name="throwables.throw_angle.max"
+            label="Maximum Throw Angle"
+            description="Maximum angle an item will be throw at"
+            min={-90}
+            max={90}
+            step={1}
+            value={$data.throwables.throw_angle.max}
+            oninput={() => {
+              if (
+                $data.throwables.throw_angle.max <
+                $data.throwables.throw_angle.min
+              ) {
+                $data.throwables.throw_angle.min =
+                  $data.throwables.throw_angle.max;
+              }
+            }}
+          />
+
+          <div class="arrow-wrapper">
+            <span
+              class="arrow"
+              style={`transform: rotate(${$data.throwables.throw_angle.max}deg);`}
+            ></span>
+          </div>
+        </div>
       </div>
     </FormSection>
 
@@ -668,5 +704,50 @@
 
   .size-estimate__size {
     color: #63b4c9;
+  }
+
+  .column {
+    display: flex;
+    gap: 0.5rem;
+    flex-flow: column;
+    position: relative;
+    flex: auto;
+    width: 100%;
+  }
+
+  .arrow-wrapper {
+    position: relative;
+    width: 80px;
+    height: 60px;
+    align-self: center;
+  }
+
+  .arrow {
+    position: absolute;
+    top: 25px;
+    width: 50px;
+    height: 5px;
+    background-color: #fff;
+    animation: arrow 700ms linear infinite;
+  }
+
+  .arrow::after,
+  .arrow::before {
+    content: "";
+    position: absolute;
+    width: 24px;
+    height: 5px;
+    right: -4px;
+    background-color: #fff;
+  }
+
+  .arrow::after {
+    top: -7px;
+    transform: rotate(45deg);
+  }
+
+  .arrow::before {
+    top: 7px;
+    transform: rotate(-45deg);
   }
 </style>
