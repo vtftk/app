@@ -47,14 +47,7 @@
 
   type Schema = z.infer<typeof schema>;
 
-  // Defaults when creating a new sound
-  const createDefaults: Partial<Schema> = {
-    name: "",
-    sound: undefined,
-    volume: 1,
-  };
-
-  function createFromExisting(config: Sound): Partial<Schema> {
+  function createFromExisting(config: Sound): Schema {
     return {
       name: config.name,
       sound: config.src,
@@ -62,10 +55,18 @@
     };
   }
 
-  const { form, data, isValid, setFields } = createForm<z.infer<typeof schema>>(
-    {
+  function getDefaultSound(): Schema {
+    return {
+      name: "",
+      sound: undefined!,
+      volume: 1,
+    };
+  }
+
+  const { form, data, isValid, setFields, setInitialValues, reset } =
+    createForm<z.infer<typeof schema>>({
       // Derive initial values
-      initialValues: existing ? createFromExisting(existing) : createDefaults,
+      initialValues: getDefaultSound(),
 
       // Validation and error reporting
       extend: [validator({ schema }), reporter()],
@@ -93,8 +94,14 @@
           goto("/sounds");
         }
       },
-    },
-  );
+    });
+
+  $effect(() => {
+    setInitialValues(
+      existing ? createFromExisting(existing) : getDefaultSound(),
+    );
+    reset();
+  });
 
   function saveSound(sound: string | File) {
     if (sound instanceof File) {

@@ -52,28 +52,27 @@
       runtimeAppData.vtube_studio_connected,
   );
 
-  // Defaults when creating a new throwable
-  const createDefaults: Partial<ItemSchema> = {
-    name: "",
-    config: {
-      image: {
-        image: undefined!,
-        scale: 1,
-        weight: 1,
-        pixelate: false,
+  function getDefaultItem(): ItemSchema {
+    return {
+      name: "",
+      config: {
+        image: {
+          image: undefined!,
+          scale: 1,
+          weight: 1,
+          pixelate: false,
+        },
+        windup: {
+          enabled: false,
+          duration: 1000,
+        },
       },
-      windup: {
-        enabled: false,
-        duration: 1000,
-      },
-    },
-    impactSoundIds: [],
-    windupSoundIds: [],
-  };
+      impactSoundIds: [],
+      windupSoundIds: [],
+    };
+  }
 
-  function createFromExisting(
-    config: ItemWithImpactSounds,
-  ): Partial<ItemSchema> {
+  function createFromExisting(config: ItemWithImpactSounds): ItemSchema {
     const { image, windup } = config.config;
     return {
       name: config.name,
@@ -94,36 +93,44 @@
     };
   }
 
-  const { form, data, touched, setFields } = createForm<ItemSchema>({
-    // Derive initial values
-    initialValues: existing ? createFromExisting(existing) : createDefaults,
+  const { form, data, touched, setFields, setInitialValues, reset } =
+    createForm<ItemSchema>({
+      // Derive initial values
+      initialValues: getDefaultItem(),
 
-    // Validation and error reporting
-    extend: [validator({ schema: itemSchema }), reporter()],
+      // Validation and error reporting
+      extend: [validator({ schema: itemSchema }), reporter()],
 
-    async onSubmit(values) {
-      const savePromise = save(values);
+      async onSubmit(values) {
+        const savePromise = save(values);
 
-      toast.promise(
-        savePromise,
-        existing
-          ? {
-              loading: "Saving item...",
-              success: "Saved item",
-              error: toastErrorMessage("Failed to save item"),
-            }
-          : {
-              loading: "Creating item...",
-              success: "Created item",
-              error: toastErrorMessage("Failed to create item"),
-            },
-      );
+        toast.promise(
+          savePromise,
+          existing
+            ? {
+                loading: "Saving item...",
+                success: "Saved item",
+                error: toastErrorMessage("Failed to save item"),
+              }
+            : {
+                loading: "Creating item...",
+                success: "Created item",
+                error: toastErrorMessage("Failed to create item"),
+              },
+        );
 
-      // Go back to the list when creating rather than editing
-      if (!existing) {
-        goto("/throwables");
-      }
-    },
+        // Go back to the list when creating rather than editing
+        if (!existing) {
+          goto("/throwables");
+        }
+      },
+    });
+
+  $effect(() => {
+    setInitialValues(
+      existing ? createFromExisting(existing) : getDefaultItem(),
+    );
+    reset();
   });
 
   // Store initial impact sounds list for checking touched state

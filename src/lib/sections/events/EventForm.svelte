@@ -79,22 +79,34 @@
   const eventOutcomeState = getEventOutcomeDefaults();
   const throwableDataState = getThrowableDataDefaults();
 
-  const { form, data, setFields, isDirty, setIsDirty } =
-    createForm<EventSchema>({
-      // Derive initial values
-      initialValues: existing ? existing : getDefaultEvent(),
+  const {
+    form,
+    data,
+    setFields,
+    isDirty,
+    setIsDirty,
+    setInitialValues,
+    reset,
+  } = createForm<EventSchema>({
+    // Derive initial values
+    initialValues: getDefaultEvent(),
 
-      // Validation and error reporting
-      extend: [validator({ schema: eventSchema }), reporter()],
+    // Validation and error reporting
+    extend: [validator({ schema: eventSchema }), reporter()],
 
-      async onSubmit(values) {
-        await save(values);
+    async onSubmit(values) {
+      await save(values);
 
-        if (!existing) {
-          goto("/events");
-        }
-      },
-    });
+      if (!existing) {
+        goto("/events");
+      }
+    },
+  });
+
+  $effect(() => {
+    setInitialValues(existing ? existing : getDefaultEvent());
+    reset();
+  });
 
   async function save(values: EventSchema) {
     let savePromise: Promise<VEvent>;

@@ -98,7 +98,7 @@ return message;
     [CommandOutcomeType.Script]: getOutcomeDefaults(CommandOutcomeType.Script),
   };
 
-  function createFromExisting(config: CommandWithAliases): Partial<Schema> {
+  function createFromExisting(config: CommandWithAliases): Schema {
     return {
       name: config.name,
       command: config.command,
@@ -110,19 +110,29 @@ return message;
     };
   }
 
-  const createDefaults: Schema = {
-    name: "",
-    command: "",
-    enabled: true,
-    outcome: getOutcomeDefaults(CommandOutcomeType.Template),
-    require_role: MinimumRequiredRole.None,
-    cooldown: { enabled: true, duration: 1000, per_user: false },
-    aliases: [""],
-  };
+  function getDefaultCommand(): Schema {
+    return {
+      name: "",
+      command: "",
+      enabled: true,
+      outcome: getOutcomeDefaults(CommandOutcomeType.Template),
+      require_role: MinimumRequiredRole.None,
+      cooldown: { enabled: true, duration: 1000, per_user: false },
+      aliases: [""],
+    };
+  }
 
-  const { form, data, setFields, isDirty, setIsDirty } = createForm<Schema>({
+  const {
+    form,
+    data,
+    setFields,
+    isDirty,
+    setIsDirty,
+    setInitialValues,
+    reset,
+  } = createForm<Schema>({
     // Derive initial values
-    initialValues: existing ? createFromExisting(existing) : createDefaults,
+    initialValues: getDefaultCommand(),
 
     // Validation and error reporting
     extend: [validator({ schema }), reporter()],
@@ -134,6 +144,13 @@ return message;
         goto("/commands");
       }
     },
+  });
+
+  $effect(() => {
+    setInitialValues(
+      existing ? createFromExisting(existing) : getDefaultCommand(),
+    );
+    reset();
   });
 
   function saveWithToast(values: Schema) {
