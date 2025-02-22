@@ -392,20 +392,20 @@
     </FormSection>
 
     <!-- Spin speed -->
-    <FormSection title="Spin speed">
+    <FormSection title="Spin Duration">
       <div class="row spin-speed-row">
         <div class="column column--inputs">
           <FormNumberInput
             id="throwables.spin_speed.min"
             name="throwables.spin_speed.min"
-            label="Minimum Spin Speed"
+            label="Minimum Spin Duration"
             description="Minimum time to complete a full spin (ms)"
           />
 
           <FormNumberInput
             id="throwables.spin_speed.max"
             name="throwables.spin_speed.max"
-            label="Maximum Spin Speed"
+            label="Maximum Spin Duration"
             description="Maximum time to complete a full spin (ms)"
           />
         </div>
