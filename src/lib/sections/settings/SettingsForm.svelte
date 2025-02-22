@@ -393,20 +393,40 @@
 
     <!-- Spin speed -->
     <FormSection title="Spin speed">
-      <div class="row">
-        <FormNumberInput
-          id="throwables.spin_speed.min"
-          name="throwables.spin_speed.min"
-          label="Minimum Spin Speed"
-          description="Minimum time to complete a full spin (ms)"
-        />
+      <div class="row spin-speed-row">
+        <div class="column column--inputs">
+          <FormNumberInput
+            id="throwables.spin_speed.min"
+            name="throwables.spin_speed.min"
+            label="Minimum Spin Speed"
+            description="Minimum time to complete a full spin (ms)"
+          />
 
-        <FormNumberInput
-          id="throwables.spin_speed.max"
-          name="throwables.spin_speed.max"
-          label="Maximum Spin Speed"
-          description="Maximum time to complete a full spin (ms)"
-        />
+          <FormNumberInput
+            id="throwables.spin_speed.max"
+            name="throwables.spin_speed.max"
+            label="Maximum Spin Speed"
+            description="Maximum time to complete a full spin (ms)"
+          />
+        </div>
+
+        <div class="column">
+          <div class="speed-visual">
+            <img
+              class="speed-visual__item"
+              src="/avatar-64x64.png"
+              alt=""
+              style={`animation-duration: ${$data.throwables.spin_speed.min}ms`}
+            />
+
+            <img
+              class="speed-visual__item"
+              src="/avatar-64x64.png"
+              alt=""
+              style={`animation-duration: ${$data.throwables.spin_speed.max}ms`}
+            />
+          </div>
+        </div>
       </div>
     </FormSection>
 
@@ -727,7 +747,12 @@
     display: flex;
   }
 
-  .arrows-column--inputs {
+  .spin-speed-row {
+    display: flex;
+  }
+
+  .arrows-column--inputs,
+  .column--inputs {
     flex: auto;
   }
 
@@ -794,5 +819,32 @@
     top: 7px;
     transform: rotate(-45deg);
     border-radius: 0.5rem;
+  }
+
+  .speed-visual {
+    display: flex;
+    flex-flow: column;
+    gap: 3rem;
+    align-items: center;
+    justify-content: space-around;
+  }
+
+  .speed-visual__item {
+    height: 64px;
+    width: 64px;
+    animation-name: spinClockwise;
+    animation-iteration-count: infinite;
+    transform-origin: center;
+    animation-timing-function: linear !important;
+    animation-fill-mode: both !important;
+  }
+
+  @keyframes spinClockwise {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
 </style>
