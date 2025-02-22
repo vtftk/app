@@ -423,36 +423,8 @@
       />
 
       <!-- Throw angle -->
-      <div class="row">
-        <div class="column">
-          <FormSlider
-            id="throwables.throw_angle.min"
-            name="throwables.throw_angle.min"
-            label="Minimum Throw Angle"
-            description="Minimum angle an item will be throw at"
-            min={-90}
-            max={90}
-            step={1}
-            value={$data.throwables.throw_angle.min}
-            oninput={() => {
-              if (
-                $data.throwables.throw_angle.min >
-                $data.throwables.throw_angle.max
-              ) {
-                $data.throwables.throw_angle.max =
-                  $data.throwables.throw_angle.min;
-              }
-            }}
-          />
-
-          <div class="arrow-wrapper">
-            <span
-              class="arrow"
-              style={`transform: rotate(${$data.throwables.throw_angle.min}deg);`}
-            ></span>
-          </div>
-        </div>
-        <div class="column">
+      <div class="row arrows-row">
+        <div class="column arrows-column--inputs">
           <FormSlider
             id="throwables.throw_angle.max"
             name="throwables.throw_angle.max"
@@ -473,11 +445,45 @@
             }}
           />
 
-          <div class="arrow-wrapper">
-            <span
-              class="arrow"
-              style={`transform: rotate(${$data.throwables.throw_angle.max}deg);`}
-            ></span>
+          <FormSlider
+            id="throwables.throw_angle.min"
+            name="throwables.throw_angle.min"
+            label="Minimum Throw Angle"
+            description="Minimum angle an item will be throw at"
+            min={-90}
+            max={90}
+            step={1}
+            value={$data.throwables.throw_angle.min}
+            oninput={() => {
+              if (
+                $data.throwables.throw_angle.min >
+                $data.throwables.throw_angle.max
+              ) {
+                $data.throwables.throw_angle.max =
+                  $data.throwables.throw_angle.min;
+              }
+            }}
+          />
+        </div>
+        <div class="column arrows-column--arrows">
+          <div class="arrow-container">
+            <span class="arrow-text">Items coming from this side</span>
+
+            <div class="arrows">
+              <div class="arrow-wrapper">
+                <span
+                  class="arrow"
+                  style={`transform: rotate(${$data.throwables.throw_angle.max}deg);`}
+                ></span>
+              </div>
+
+              <div class="arrow-wrapper">
+                <span
+                  class="arrow"
+                  style={`transform: rotate(${$data.throwables.throw_angle.min}deg);`}
+                ></span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -708,11 +714,46 @@
 
   .column {
     display: flex;
-    gap: 0.5rem;
+    gap: 1rem;
     flex-flow: column;
     position: relative;
-    flex: auto;
+  }
+
+  .arrows-row {
+    justify-content: space-between;
+    align-items: stretch;
     width: 100%;
+    flex: auto;
+    display: flex;
+  }
+
+  .arrows-column--inputs {
+    flex: auto;
+  }
+
+  .arrow-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    gap: 1rem;
+    background-color: #222;
+    border: 1px solid #333;
+    height: 100%;
+    padding: 1rem;
+  }
+
+  .arrows {
+    display: flex;
+    flex-flow: column;
+    gap: 2rem;
+    border-left: 4px solid #cc00cc;
+  }
+
+  .arrow-text {
+    max-width: 8rem;
+    font-size: 16px;
+    color: #999;
+    text-align: center;
   }
 
   .arrow-wrapper {
@@ -720,6 +761,7 @@
     width: 80px;
     height: 60px;
     align-self: center;
+    padding-left: 12px;
   }
 
   .arrow {
@@ -729,6 +771,7 @@
     height: 5px;
     background-color: #fff;
     animation: arrow 700ms linear infinite;
+    border-radius: 0.5rem;
   }
 
   .arrow::after,
@@ -744,10 +787,12 @@
   .arrow::after {
     top: -7px;
     transform: rotate(45deg);
+    border-radius: 0.5rem;
   }
 
   .arrow::before {
     top: 7px;
     transform: rotate(-45deg);
+    border-radius: 0.5rem;
   }
 </style>
