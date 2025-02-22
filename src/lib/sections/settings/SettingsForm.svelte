@@ -143,10 +143,8 @@
     };
   }
 
-  const { form, data, setFields } = $derived(
+  const { form, data, setFields, setInitialValues, reset } = $derived(
     createForm<z.infer<typeof schema>>({
-      initialValues: createFromExisting(appData),
-
       // Validation and error reporting
       extend: [validator({ schema }), reporter()],
 
@@ -163,6 +161,11 @@
       },
     }),
   );
+
+  $effect(() => {
+    setInitialValues(createFromExisting(appData));
+    reset();
+  });
 
   async function save(values: Schema) {
     const { throwables, model, sounds, vtube_studio, main, physics } = values;
