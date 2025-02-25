@@ -29,25 +29,6 @@ monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
   noSyntaxValidation: false,
 });
 
-// Register a new language
-monaco.languages.register({ id: "commandTemplateFormat" });
-
-// Define the language configuration
-monaco.languages.setMonarchTokensProvider("commandTemplateFormat", {
-  tokenizer: {
-    root: [
-      [/\$\([a-zA-Z0-9_]+\)/, "variable"],
-      [/[^$]+/, "string"],
-    ],
-  },
-});
-
-// Optional: Define additional language configuration
-monaco.languages.setLanguageConfiguration("commandTemplateFormat", {
-  brackets: [["(", ")"]],
-  autoClosingPairs: [{ open: "(", close: ")" }],
-});
-
 self.MonacoEnvironment = {
   getWorker: async function (_: string, label: string) {
     switch (label) {

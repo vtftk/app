@@ -38,7 +38,7 @@
   let editorContainer: HTMLElement | undefined = $state();
 
   async function loadMonaco() {
-    const module = await import("$lib/monaco");
+    const module = await import("$lib/components/scripts/monaco");
     return module.default;
   }
 
