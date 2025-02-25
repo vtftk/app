@@ -1,7 +1,7 @@
 import * as monaco from "monaco-editor";
 
-import libraryDefinition from "../../scripting/dist/runtime.d.ts?raw";
-import builtinLibraryDefinition from "../../scripting/types/builtin.d.ts?raw";
+import libraryDefinition from "../../../../scripting/dist/runtime.d.ts?raw";
+import builtinLibraryDefinition from "../../../../scripting/types/builtin.d.ts?raw";
 
 const compilerOptions =
   monaco.languages.typescript.javascriptDefaults.getCompilerOptions();
