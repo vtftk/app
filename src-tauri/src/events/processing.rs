@@ -150,7 +150,7 @@ async fn process_event(
                     script_handle,
                     twitch,
                     command,
-                    match_data.event_data.clone(),
+                    &match_data.event_data,
                 ))
             });
 
@@ -165,7 +165,7 @@ async fn process_event(
                     script_handle,
                     event_sender,
                     event,
-                    match_data.event_data.clone(),
+                    &match_data.event_data,
                 ))
             });
 
@@ -266,7 +266,7 @@ pub async fn execute_command(
     script_handle: &ScriptExecutorHandle,
     twitch: &Twitch,
     command: CommandWithContext,
-    event_data: EventData,
+    event_data: &EventData,
 ) -> anyhow::Result<()> {
     let EventInputData::Chat {
         message,
@@ -347,7 +347,7 @@ pub async fn execute_command(
             let ctx = CommandContext {
                 message_id: message_id.to_string(),
                 full_message: message.to_string(),
-                input_data: event_data.input_data,
+                input_data: event_data.input_data.clone(),
                 message: command.message,
                 args: command.args,
                 user,
@@ -458,7 +458,7 @@ pub async fn execute_event(
 
     event_sender: &OverlayMessageSender,
     event: EventModel,
-    event_data: EventData,
+    event_data: &EventData,
 ) -> anyhow::Result<()> {
     // Ensure required role is present
     if !has_required_role(

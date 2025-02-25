@@ -28,7 +28,7 @@ pub async fn produce_outcome_message(
     script_handle: &ScriptExecutorHandle,
 
     event: EventModel,
-    event_data: EventData,
+    event_data: &EventData,
 ) -> anyhow::Result<Option<OverlayMessage>> {
     match event.config.outcome {
         EventOutcome::ThrowBits(data) => throw_bits_outcome(db, event_data, data).await.map(Some),
@@ -52,21 +52,21 @@ pub async fn produce_outcome_message(
 pub async fn execute_script(
     script_handle: &ScriptExecutorHandle,
     event_id: Uuid,
-    event_data: EventData,
+    event_data: &EventData,
     data: EventOutcomeScript,
 ) -> anyhow::Result<()> {
     script_handle
         .execute(
             RuntimeExecutionContext::Event { event_id },
             data.script,
-            event_data,
+            event_data.clone(),
         )
         .await?;
 
     Ok(())
 }
 
-fn format_subscription_tier(tier: SubscriptionTier) -> &'static str {
+fn format_subscription_tier(tier: &SubscriptionTier) -> &'static str {
     match tier {
         SubscriptionTier::Tier1 => "Tier 1",
         SubscriptionTier::Tier2 => "Tier 2",
@@ -78,19 +78,20 @@ fn format_subscription_tier(tier: SubscriptionTier) -> &'static str {
 
 async fn send_chat_message(
     twitch: &Twitch,
-    event_data: EventData,
+    event_data: &EventData,
     data: EventOutcomeSendChat,
 ) -> anyhow::Result<()> {
     let mut message = data.template;
 
     let user_name = event_data
         .user
+        .as_ref()
         .map(|user| user.name.to_string())
         .unwrap_or_else(|| "Anonymous".to_string());
 
     message = message.replace("$(user)", user_name.as_str());
 
-    match event_data.input_data {
+    match &event_data.input_data {
         EventInputData::Redeem {
             reward_name,
             cost,
@@ -170,7 +171,7 @@ async fn send_chat_message(
 /// Produce a bits throwing outcome message
 async fn throw_bits_outcome(
     db: &DbPool,
-    event_data: EventData,
+    event_data: &EventData,
     data: EventOutcomeBits,
 ) -> anyhow::Result<OverlayMessage> {
     let input = match event_data.input_data {
@@ -217,19 +218,19 @@ async fn throw_bits_outcome(
 /// Produce a channel emote throwing outcome message
 async fn throw_channel_emotes_outcome(
     twitch: &Twitch,
-    event_data: EventData,
+    event_data: &EventData,
     data: EventOutcomeChannelEmotes,
 ) -> anyhow::Result<OverlayMessage> {
-    let user = match event_data.user {
-        Some(user) => user,
+    let user_id = match &event_data.user {
+        Some(user) => user.id.clone(),
         None => {
             return Err(anyhow!(
-                "cannot throw channel emotes when user is not present"
+                "cannot throw channel emotes when user is not provided"
             ))
         }
     };
 
-    let emotes = twitch.get_channel_emotes(user.id.clone()).await?;
+    let emotes = twitch.get_channel_emotes(user_id).await?;
 
     // Create sounds from builtins
     let sounds: Vec<PartialSoundModel> = create_default_impact_sounds();
@@ -340,12 +341,12 @@ fn create_throwable_message(
 // Produce a throwable message
 async fn throwable_outcome(
     db: &DbPool,
-    event_data: EventData,
+    event_data: &EventData,
     data: EventOutcomeThrowable,
 ) -> anyhow::Result<OverlayMessage> {
     let items = resolve_items(db, &data.throwable_ids).await?;
 
-    create_throwable_message(items, data.amount, get_event_data_input_amount(&event_data))
+    create_throwable_message(items, data.amount, get_event_data_input_amount(event_data))
 }
 
 /// Produce a hotkey trigger message

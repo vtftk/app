@@ -143,7 +143,7 @@ pub async fn test_event_by_id(
         .context("unknown event")?;
 
     if let Some(msg) =
-        produce_outcome_message(db, &twitch, &script_handle, event, event_data).await?
+        produce_outcome_message(db, &twitch, &script_handle, event, &event_data).await?
     {
         _ = event_sender.send(msg);
     }
