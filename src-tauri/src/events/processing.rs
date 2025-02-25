@@ -199,7 +199,7 @@ pub fn is_cooldown_elapsed(
 pub async fn is_command_cooldown_elapsed(
     db: &DbPool,
     command: &CommandModel,
-    user: &TwitchEventUser,
+    user_id: &UserId,
     current_time: DateTime<Utc>,
 ) -> anyhow::Result<bool> {
     let cooldown = &command.config.cooldown;
@@ -244,7 +244,7 @@ pub async fn is_command_cooldown_elapsed(
         if last_execution
             .metadata
             .user
-            .is_none_or(|event_user| event_user.id != user.id)
+            .is_none_or(|event_user| event_user.id != user_id)
         {
             offset += 1;
 
@@ -283,20 +283,14 @@ pub async fn execute_command(
     };
 
     // Ensure required role is present
-    if !has_required_role(
-        twitch,
-        Some(user.id.clone()),
-        &command.command.config.require_role,
-    )
-    .await
-    {
+    if !has_required_role(twitch, Some(&user.id), &command.command.config.require_role).await {
         debug!("skipping command: missing required role");
         return Ok(());
     }
 
     let current_time = Utc::now();
 
-    if !is_command_cooldown_elapsed(db, &command.command, &user, current_time).await? {
+    if !is_command_cooldown_elapsed(db, &command.command, &user.id, current_time).await? {
         debug!("skipping command: cooldown");
         return Ok(());
     }
@@ -322,20 +316,7 @@ pub async fn execute_command(
                 .replace("$(user)", user.name.as_str())
                 .replace("$(touser)", to_usr);
 
-            if message.len() < 500 {
-                twitch.send_chat_message(&message).await?;
-            } else {
-                let mut chars = message.chars();
-
-                loop {
-                    let message = chars.by_ref().take(500).collect::<String>();
-                    if message.is_empty() {
-                        break;
-                    }
-
-                    twitch.send_chat_message(&message).await?;
-                }
-            }
+            twitch.send_chat_message_chunked(&message).await?;
         }
         CommandOutcome::Script { script } => {
             let user = CommandContextUser {
@@ -463,7 +444,7 @@ pub async fn execute_event(
     // Ensure required role is present
     if !has_required_role(
         twitch,
-        event_data.user.as_ref().map(|value| value.id.clone()),
+        event_data.user.as_ref().map(|value| &value.id),
         &event.config.require_role,
     )
     .await
@@ -518,7 +499,7 @@ pub async fn execute_event(
 
 pub async fn has_required_role(
     twitch: &Twitch,
-    user_id: Option<UserId>,
+    user_id: Option<&UserId>,
     required_role: &MinimumRequireRole,
 ) -> bool {
     // No role required (Initial level)

@@ -170,6 +170,26 @@ impl Twitch {
         Ok(response)
     }
 
+    /// Sends a message to Twitch chat, if the message is over the 500 character limit
+    /// the message will be chunked into multiple parts and sent separately
+    pub async fn send_chat_message_chunked(&self, message: &str) -> anyhow::Result<()> {
+        if message.len() < 500 {
+            self.send_chat_message(message).await?;
+        } else {
+            let mut chars = message.chars();
+            loop {
+                let message = chars.by_ref().take(500).collect::<String>();
+                if message.is_empty() {
+                    break;
+                }
+
+                self.send_chat_message(&message).await?;
+            }
+        }
+
+        Ok(())
+    }
+
     pub async fn get_channel_emotes(&self, user_id: UserId) -> anyhow::Result<Vec<ChannelEmote>> {
         // Obtain twitch access token
         let token = self.get_user_token().await.context("not authenticated")?;
@@ -182,7 +202,7 @@ impl Twitch {
         Ok(emotes)
     }
 
-    pub async fn get_follower_by_id(&self, user_id: UserId) -> anyhow::Result<Option<Follower>> {
+    pub async fn get_follower_by_id(&self, user_id: &UserId) -> anyhow::Result<Option<Follower>> {
         // Obtain twitch access token
         let token = self.get_user_token().await.context("not authenticated")?;
 
