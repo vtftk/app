@@ -17,7 +17,7 @@ pub struct ScheduledEvent {
 
     /// Interval the event executes at
     /// (For further scheduling)
-    pub interval: u64,
+    pub interval_seconds: u64,
 
     /// Next instance the
     pub next_run: Instant,
@@ -53,7 +53,7 @@ pub struct SchedulerQueueEvent {
     pub event_id: Uuid,
     /// Interval the event executes at
     /// (For further scheduling)
-    pub interval: u64,
+    pub interval_seconds: u64,
 }
 
 impl SchedulerHandle {
@@ -103,7 +103,7 @@ impl SchedulerEventLoop {
             // Create the scheduled events
             self.events = events
                 .into_iter()
-                .map(|event| create_scheduled_event(event.event_id, event.interval))
+                .map(|event| create_scheduled_event(event.event_id, event.interval_seconds))
                 .collect();
 
             // Clear sleep state
@@ -129,8 +129,10 @@ impl SchedulerEventLoop {
             Self::execute_event(event.event_id, self.event_tx.clone());
 
             // Create the next iteration of the event
-            self.events
-                .push(create_scheduled_event(event.event_id, event.interval));
+            self.events.push(create_scheduled_event(
+                event.event_id,
+                event.interval_seconds,
+            ));
 
             // Emit event
             return Poll::Ready(());
@@ -166,19 +168,19 @@ impl Future for SchedulerEventLoop {
     }
 }
 
-fn create_scheduled_event(event_id: Uuid, interval: u64) -> ScheduledEvent {
-    let next_run = get_next_interval_instant(interval);
+fn create_scheduled_event(event_id: Uuid, interval_seconds: u64) -> ScheduledEvent {
+    let next_run = get_next_interval_instant(interval_seconds);
     ScheduledEvent {
         event_id,
-        interval,
+        interval_seconds,
         next_run,
     }
 }
 
-/// Gets the next instant for a fixed interval
-fn get_next_interval_instant(interval: u64) -> Instant {
+/// Gets the next instant for a fixed interval in seconds
+fn get_next_interval_instant(interval_seconds: u64) -> Instant {
     let now = Local::now();
     let seconds_since_epoch = now.timestamp() as u64;
-    let next = (seconds_since_epoch / interval + 1) * interval;
+    let next = (seconds_since_epoch / interval_seconds + 1) * interval_seconds;
     Instant::now() + Duration::from_secs(next - seconds_since_epoch)
 }

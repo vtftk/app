@@ -119,7 +119,7 @@ pub async fn update_scheduler_events(db: &DbPool, scheduler: &SchedulerHandle) {
 
                 Some(SchedulerQueueEvent {
                     event_id: event.id,
-                    interval,
+                    interval_seconds: interval,
                 })
             })
             .collect();
