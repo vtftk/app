@@ -155,7 +155,7 @@
       rowCount - 1,
     );
 
-    const startIndex: number = startRow;
+    const startIndex: number = startRow * COLUMNS;
     const stopIndex: number = stopRow * COLUMNS + COLUMNS - 1;
 
     return {
