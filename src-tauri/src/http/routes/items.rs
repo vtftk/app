@@ -11,6 +11,14 @@ use crate::{
     http::error::HttpResult,
 };
 
+/// POST /items/all
+///
+/// List all items
+pub async fn all(Extension(db): Extension<DbPool>) -> HttpResult<Vec<ItemModel>> {
+    let items = ItemModel::all(&db).await.context("failed to get items")?;
+    Ok(Json(items))
+}
+
 #[derive(Deserialize)]
 pub struct QueryByName {
     names: Vec<String>,

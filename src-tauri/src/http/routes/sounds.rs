@@ -8,6 +8,14 @@ use crate::{
     http::error::HttpResult,
 };
 
+/// POST /items/all
+///
+/// List all sounds
+pub async fn all(Extension(db): Extension<DbPool>) -> HttpResult<Vec<SoundModel>> {
+    let sounds = SoundModel::all(&db).await.context("failed to get sounds")?;
+    Ok(Json(sounds))
+}
+
 #[derive(Deserialize)]
 pub struct QueryByName {
     names: Vec<String>,

@@ -39,9 +39,11 @@ pub fn router() -> Router {
             get(data::handle_get_auth_token).post(data::handle_set_auth_token),
         )
         // Requesting items
+        .route("/items", get(items::all))
         .route("/items/query-by-name", post(items::query_by_name))
         .route("/items/query-by-id", post(items::query_by_id))
         // Requesting sounds
+        .route("/sounds", get(sounds::all))
         .route("/sounds/query-by-name", post(sounds::query_by_name))
         .route("/sounds/query-by-id", post(sounds::query_by_id))
 }
