@@ -5,8 +5,10 @@ use axum::{
 
 mod calibration;
 mod data;
+mod items;
 mod oauth;
 mod overlay;
+mod sounds;
 
 pub fn router() -> Router {
     Router::new()
@@ -25,7 +27,10 @@ pub fn router() -> Router {
         // Overlay endpoints
         .route("/overlay", get(overlay::page))
         .route("/overlay/config", get(overlay::get_overlay_config))
-        .route("/overlay/events", get(overlay::handle_sse))
+        .route(
+            "/overlay/events",
+            get(overlay::handle_sse).post(overlay::emit_event),
+        )
         .route("/overlay/icon", get(overlay::icon))
         .route("/overlay/data", put(overlay::update_overlay_data))
         // VTube studio access token endpoints
@@ -33,4 +38,10 @@ pub fn router() -> Router {
             "/data/vt-auth-token",
             get(data::handle_get_auth_token).post(data::handle_set_auth_token),
         )
+        // Requesting items
+        .route("/items/query-by-name", post(items::query_by_name))
+        .route("/items/query-by-id", post(items::query_by_id))
+        // Requesting sounds
+        .route("/sounds/query-by-name", post(sounds::query_by_name))
+        .route("/sounds/query-by-id", post(sounds::query_by_id))
 }

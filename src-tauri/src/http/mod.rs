@@ -4,7 +4,7 @@
 
 use crate::{
     database::{entity::app_data::AppDataModel, DbPool},
-    overlay::{OverlayDataStore, OverlayMessageReceiver},
+    overlay::{OverlayDataStore, OverlayMessageReceiver, OverlayMessageSender},
     storage::Storage,
     twitch::manager::Twitch,
 };
@@ -20,7 +20,8 @@ pub mod routes;
 
 pub async fn start_http_server(
     db: DbPool,
-    event_handle: OverlayMessageReceiver,
+    overlay_tx: OverlayMessageSender,
+    overlay_rx: OverlayMessageReceiver,
     app_handle: AppHandle,
     twitch: Twitch,
     overlay_data: OverlayDataStore,
@@ -31,7 +32,8 @@ pub async fn start_http_server(
     // build our application with a single route
     let app = routes::router()
         .layer(Extension(db))
-        .layer(Extension(event_handle))
+        .layer(Extension(overlay_tx))
+        .layer(Extension(overlay_rx))
         .layer(Extension(app_handle))
         .layer(Extension(twitch))
         .layer(Extension(overlay_data))

@@ -182,7 +182,7 @@ fn setup(app: &mut App) -> Result<(), Box<dyn Error>> {
         db.clone(),
         twitch.clone(),
         script_handle,
-        overlay_tx,
+        overlay_tx.clone(),
         handle.clone(),
         event_rx,
     ));
@@ -190,6 +190,7 @@ fn setup(app: &mut App) -> Result<(), Box<dyn Error>> {
     // Run HTTP server
     _ = spawn(http::start_http_server(
         db,
+        overlay_tx,
         overlay_rx,
         handle.clone(),
         twitch,

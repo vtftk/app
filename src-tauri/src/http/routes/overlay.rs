@@ -1,8 +1,12 @@
 use crate::database::entity::app_data::{AppDataModel, OverlayConfig};
 use crate::database::DbPool;
-use crate::http::error::HttpResult;
+use crate::http::error::{DynHttpError, HttpResult};
 use crate::http::models::UpdateRuntimeAppData;
-use crate::overlay::{OverlayDataStore, OverlayEventStream, OverlayMessageReceiver, OVERLAY_PAGE};
+use crate::overlay::{
+    OverlayDataStore, OverlayEventStream, OverlayMessage, OverlayMessageReceiver,
+    OverlayMessageSender, OVERLAY_PAGE,
+};
+use anyhow::Context;
 use axum::response::IntoResponse;
 use axum::Json;
 use axum::{
@@ -41,6 +45,17 @@ pub async fn icon() -> impl IntoResponse {
 pub async fn get_overlay_config(Extension(db): Extension<DbPool>) -> HttpResult<OverlayConfig> {
     let data = AppDataModel::get_or_default(&db).await?;
     Ok(Json(data.overlay))
+}
+
+/// POST /overlay/events
+///
+/// Emit an event to the overlay
+pub async fn emit_event(
+    Extension(overlay_tx): Extension<OverlayMessageSender>,
+    Json(req): Json<OverlayMessage>,
+) -> Result<StatusCode, DynHttpError> {
+    overlay_tx.send(req).context("failed to message overlay")?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// GET /overlay/events
