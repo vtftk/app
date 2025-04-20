@@ -8,10 +8,13 @@ mod data;
 mod items;
 mod oauth;
 mod overlay;
+mod server;
 mod sounds;
 
 pub fn router() -> Router {
     Router::new()
+        // Get server details
+        .route("/server/details", get(server::details))
         // OAuth complete page and OAuth complete endpoint
         .route("/oauth", get(oauth::handle_oauth))
         .route("/oauth/complete", post(oauth::handle_oauth_complete))
