@@ -1,27 +1,7 @@
+use crate::database::{DbPool, DbResult};
 use chrono::{DateTime, Utc};
-use sea_query::{Expr, IdenStatic, OnConflict, Query};
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
-
-use crate::database::{
-    helpers::{sql_exec, sql_query_maybe_one},
-    DbPool, DbResult,
-};
-
-#[derive(IdenStatic, Copy, Clone)]
-#[iden(rename = "secrets")]
-pub struct SecretsTable;
-
-#[derive(IdenStatic, Copy, Clone)]
-pub enum SecretsColumn {
-    /// Unique key the secret is stored under
-    Key,
-    /// Value of the secret
-    Value,
-    /// Additional metadata stored with the secret
-    Metadata,
-    CreatedAt,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct SecretsModel {
@@ -45,60 +25,41 @@ impl SecretsModel {
     pub async fn set(db: &DbPool, create: SetSecret) -> DbResult<()> {
         let created_at = Utc::now();
 
-        sql_exec(
-            db,
-            Query::insert()
-                .into_table(SecretsTable)
-                .columns([
-                    SecretsColumn::Key,
-                    SecretsColumn::Value,
-                    SecretsColumn::Metadata,
-                    SecretsColumn::CreatedAt,
-                ])
-                .values_panic([
-                    create.key.into(),
-                    create.value.into(),
-                    create.metadata.into(),
-                    created_at.into(),
-                ])
-                .on_conflict(
-                    OnConflict::column(SecretsColumn::Key)
-                        .update_columns([
-                            SecretsColumn::Value,
-                            SecretsColumn::Metadata,
-                            SecretsColumn::CreatedAt,
-                        ])
-                        .to_owned(),
-                ),
+        sqlx::query(
+            r#"
+            INSERT INTO "secrets" ("key", "value", "metadata", "created_at")
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(Id) DO UPDATE SET
+                "value" = excluded."value",
+                "metadata" = excluded."metadata",
+                "created_at" = excluded."created_at"
+        "#,
         )
-        .await
+        .bind(create.key)
+        .bind(create.value)
+        .bind(create.metadata)
+        .bind(created_at)
+        .execute(db)
+        .await?;
+
+        Ok(())
     }
 
     /// Find a specific key value by key
     pub async fn get_by_key(db: &DbPool, key: &str) -> DbResult<Option<Self>> {
-        sql_query_maybe_one(
-            db,
-            Query::select()
-                .from(SecretsTable)
-                .columns([
-                    SecretsColumn::Key,
-                    SecretsColumn::Value,
-                    SecretsColumn::Metadata,
-                    SecretsColumn::CreatedAt,
-                ])
-                .and_where(Expr::col(SecretsColumn::Key).eq(key)),
-        )
-        .await
+        sqlx::query_as(r#"SELECT * FROM "secrets" WHERE "key" = ?"#)
+            .bind(key)
+            .fetch_optional(db)
+            .await
     }
 
     /// Find a specific key value by key
     pub async fn delete_by_key(db: &DbPool, key: &str) -> DbResult<()> {
-        sql_exec(
-            db,
-            Query::delete()
-                .from_table(SecretsTable)
-                .and_where(Expr::col(SecretsColumn::Key).eq(key)),
-        )
-        .await
+        sqlx::query(r#"DELETE FROM "secrets" WHERE "key" = ?"#)
+            .bind(key)
+            .execute(db)
+            .await?;
+
+        Ok(())
     }
 }

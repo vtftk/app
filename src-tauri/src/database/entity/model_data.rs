@@ -1,8 +1,4 @@
-use crate::database::{
-    helpers::{sql_exec, sql_query_all},
-    DbPool, DbResult,
-};
-use sea_query::{IdenStatic, OnConflict, Query};
+use crate::database::{DbErr, DbPool, DbResult};
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 
@@ -19,17 +15,6 @@ pub struct ModelDataModel {
     /// Calibration data for the model
     #[sqlx(json)]
     pub calibration: ModelCalibration,
-}
-
-#[derive(IdenStatic, Copy, Clone)]
-#[iden(rename = "model_data")]
-pub struct ModelDataTable;
-
-#[derive(IdenStatic, Copy, Clone)]
-pub enum ModelDataColumn {
-    Id,
-    Name,
-    Calibration,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,36 +34,29 @@ pub struct CreateModelData {
 
 impl ModelDataModel {
     /// Create a new script
-    pub async fn create(db: &DbPool, create: CreateModelData) -> anyhow::Result<ModelDataModel> {
+    pub async fn create(db: &DbPool, create: CreateModelData) -> DbResult<ModelDataModel> {
         let model = ModelDataModel {
             id: create.id,
             name: create.name,
             calibration: create.calibration,
         };
 
-        let calibration_value = serde_json::to_value(&model.calibration)?;
+        let calibration_value =
+            serde_json::to_value(&model.calibration).map_err(|err| DbErr::Encode(err.into()))?;
 
-        sql_exec(
-            db,
-            Query::insert()
-                .into_table(ModelDataTable)
-                .columns([
-                    ModelDataColumn::Id,
-                    ModelDataColumn::Name,
-                    ModelDataColumn::Calibration,
-                ])
-                .values_panic([
-                    model.id.clone().into(),
-                    model.name.clone().into(),
-                    calibration_value.into(),
-                ])
-                .on_conflict(
-                    OnConflict::new()
-                        .update_column(ModelDataColumn::Name)
-                        .update_column(ModelDataColumn::Calibration)
-                        .to_owned(),
-                ),
+        sqlx::query(
+            r#"
+            INSERT INTO "model_data" ("id", "name", "calibration")
+            VALUES (?, ?, ?)
+            ON CONFLICT(Id) DO UPDATE SET
+                "name" = excluded."name",
+                "calibration" = excluded."calibration"
+        "#,
         )
+        .bind(model.id.as_str())
+        .bind(model.name.as_str())
+        .bind(calibration_value)
+        .execute(db)
         .await?;
 
         Ok(model)
@@ -86,16 +64,8 @@ impl ModelDataModel {
 
     /// Find all model data
     pub async fn all(db: &DbPool) -> DbResult<Vec<ModelDataModel>> {
-        sql_query_all(
-            db,
-            Query::select()
-                .columns([
-                    ModelDataColumn::Id,
-                    ModelDataColumn::Name,
-                    ModelDataColumn::Calibration,
-                ])
-                .from(ModelDataTable),
-        )
-        .await
+        sqlx::query_as(r#"SELECT * FROM "model_data""#)
+            .fetch_all(db)
+            .await
     }
 }
