@@ -1,8 +1,8 @@
 use crate::commands::CmdResult;
-use crate::database::entity::app_data::AppDataModel;
 use crate::database::entity::secrets::SecretsModel;
 use crate::database::entity::TWITCH_SECRET_KEY;
 use crate::database::DbPool;
+use crate::http::ServerPort;
 use crate::twitch::manager::Twitch;
 use anyhow::Context;
 use reqwest::Url;
@@ -31,12 +31,11 @@ pub async fn refresh_redeems_list(twitch: State<'_, Twitch>) -> CmdResult<()> {
 
 /// Obtain a URL for use logging into twitch using OAuth2
 #[tauri::command]
-pub async fn get_twitch_oauth_uri(
+pub fn get_twitch_oauth_uri(
     twitch: State<'_, Twitch>,
-    db: tauri::State<'_, DbPool>,
+    port_state: State<'_, ServerPort>,
 ) -> CmdResult<String> {
-    let http_port = AppDataModel::get_http_port(db.inner()).await?;
-
+    let http_port = port_state.inner().0;
     let redirect_url = format!("http://localhost:{http_port}/oauth",);
     let redirect_url = Url::parse(&redirect_url).context("invalid redirect_uri")?;
     let url = twitch.create_oauth_uri(redirect_url)?;

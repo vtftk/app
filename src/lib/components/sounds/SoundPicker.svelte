@@ -14,6 +14,7 @@
   import ControlledCheckbox from "$lib/components/input/ControlledCheckbox.svelte";
 
   import BulkSoundImport from "./BulkSoundImport.svelte";
+  import { getServerContext } from "../ServerProvider.svelte";
 
   type Props = {
     disabled?: boolean;
@@ -44,6 +45,7 @@
     selected = initialSelected;
   });
 
+  const serverContext = getServerContext();
   const appContext = getAppContext();
   const appData = $derived(appContext.appData);
 
@@ -130,7 +132,7 @@
               <td class="sound-column sound-column--preview">
                 <SoundPreview
                   volume={sound.volume * appData.sounds_config.global_volume}
-                  src={getBackendURL(sound.src)}
+                  src={getBackendURL(serverContext, sound.src)}
                 />
               </td>
             </tr>

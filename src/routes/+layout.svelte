@@ -11,6 +11,7 @@
   import { QueryClientProvider } from "@tanstack/svelte-query";
   import AppDataProvider from "$lib/sections/AppDataProvider.svelte";
   import UpdateNotification from "$lib/components/update/UpdateNotification.svelte";
+  import InternalServerProvider from "$lib/components/InternalServerProvider.svelte";
   import GlobalConfirmDialog from "$lib/components/dialog/GlobalConfirmDialog.svelte";
 </script>
 
@@ -21,28 +22,30 @@
 
 <!-- Global query client context -->
 <QueryClientProvider client={queryClient}>
-  <!-- App data loader and context provider -->
-  <AppDataProvider>
-    <main class="main">
-      <Sidebar />
+  <InternalServerProvider>
+    <!-- App data loader and context provider -->
+    <AppDataProvider>
+      <main class="main">
+        <Sidebar />
 
-      {#key page.url}
-        <div class="content" in:fly={{ y: -100, duration: 250 }}>
-          {#if navigating.to}
-            <div class="skeleton-list">
-              <div class="skeleton" style="width: 90%; height: 1.5rem;"></div>
-              <div class="skeleton" style="width: 70%; height: 1rem;"></div>
-              <div class="skeleton" style="width: 80%; height: 1rem;"></div>
-            </div>
-          {:else}
-            <slot />
-          {/if}
-        </div>
-      {/key}
-    </main>
+        {#key page.url}
+          <div class="content" in:fly={{ y: -100, duration: 250 }}>
+            {#if navigating.to}
+              <div class="skeleton-list">
+                <div class="skeleton" style="width: 90%; height: 1.5rem;"></div>
+                <div class="skeleton" style="width: 70%; height: 1rem;"></div>
+                <div class="skeleton" style="width: 80%; height: 1rem;"></div>
+              </div>
+            {:else}
+              <slot />
+            {/if}
+          </div>
+        {/key}
+      </main>
 
-    <UpdateNotification />
-  </AppDataProvider>
+      <UpdateNotification />
+    </AppDataProvider>
+  </InternalServerProvider>
 </QueryClientProvider>
 
 <style>

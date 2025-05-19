@@ -2,6 +2,8 @@ use anyhow::Context;
 use commands::events::update_scheduler_events;
 use database::{clean_old_data, entity::app_data::AppDataModel, DbPool};
 use events::{processing::process_events, scheduler::create_scheduler};
+use http::{create_http_socket, HttpExtensions, ServerPort};
+use log::error;
 use overlay::{create_overlay_channel, OverlayDataStore};
 use script::runtime::{create_script_executor, ScriptRuntimeData};
 use std::error::Error;
@@ -57,6 +59,7 @@ pub fn run() {
             commands::data::get_chat_history_estimate_size,
             commands::data::get_executions_estimate_size,
             commands::data::get_logs_estimate_size,
+            commands::data::get_http_port,
             // Twitch commands
             commands::twitch::get_twitch_oauth_uri,
             commands::twitch::is_authenticated,
@@ -119,6 +122,12 @@ fn setup(app: &mut App) -> Result<(), Box<dyn Error>> {
     let db = block_on(database::connect_database(app_data_path.join("app.db")))
         .context("failed to load database")?;
 
+    #[cfg(debug_assertions)]
+    let http_port = 58372;
+    #[cfg(not(debug_assertions))]
+    let http_port = block_on(AppDataModel::get_http_port(&db))
+        .unwrap_or(database::entity::app_data::default_http_port());
+
     let (event_tx, event_rx) = mpsc::unbounded_channel();
     let (overlay_tx, overlay_rx) = create_overlay_channel();
 
@@ -168,6 +177,7 @@ fn setup(app: &mut App) -> Result<(), Box<dyn Error>> {
     app.manage(db.clone());
 
     app.manage(storage.clone());
+    app.manage(ServerPort(http_port));
 
     // Attempt to authenticate with twitch using the saved token
     _ = spawn({
@@ -187,16 +197,38 @@ fn setup(app: &mut App) -> Result<(), Box<dyn Error>> {
         event_rx,
     ));
 
-    // Run HTTP server
-    _ = spawn(http::start_http_server(
-        db,
-        overlay_tx,
-        overlay_rx,
-        handle.clone(),
-        twitch,
-        overlay_data,
-        storage,
-    ));
+    match tauri::async_runtime::block_on(create_http_socket(http_port)) {
+        Ok(http_socket) => {
+            // Spawn HTTP server
+            _ = spawn(http::start_http_server(
+                http_socket,
+                HttpExtensions {
+                    db,
+                    overlay_tx,
+                    overlay_rx,
+                    app_handle: handle.clone(),
+                    twitch,
+                    overlay_data,
+                    storage,
+                },
+            ));
+        }
+        Err(cause) => {
+            error!("failed to bind http server socket: {cause:?}");
+
+            // Show error dialog about the failed port binding
+            rfd::MessageDialog::new()
+                .set_title("Failed to start")
+                .set_description(format!(
+                    "The port {} required to run VTFTK is currently in use, please change your port in settings 
+                    or most features of VTFTK will be non-functional",
+                    http_port
+                ))
+                .set_level(rfd::MessageLevel::Error)
+                .set_buttons(rfd::MessageButtons::Ok)
+                .show();
+        }
+    };
 
     tray::create_tray_menu(app)?;
 

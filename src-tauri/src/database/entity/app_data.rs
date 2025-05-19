@@ -86,7 +86,7 @@ pub struct MainConfig {
 }
 
 pub fn default_http_port() -> u16 {
-    58371
+    8533
 }
 
 impl Default for MainConfig {
@@ -316,6 +316,7 @@ impl AppDataModel {
     }
 
     /// HTTP port is loaded pretty frequently
+    #[cfg_attr(debug_assertions, allow(unused))]
     pub async fn get_http_port(db: &DbPool) -> anyhow::Result<u16> {
         let result: Option<(u16,)> = sql_query_maybe_one(
             db,
@@ -332,15 +333,6 @@ impl AppDataModel {
 
         // HTTP port is loaded frequently so save on loading the entire main_config every time
         let http_port = result.map(|(port,)| port).unwrap_or_else(default_http_port);
-
-        // Debug fixed port override
-        #[cfg(debug_assertions)]
-        {
-            _ = http_port;
-            Ok(58372)
-        }
-
-        #[cfg(not(debug_assertions))]
         Ok(http_port)
     }
 

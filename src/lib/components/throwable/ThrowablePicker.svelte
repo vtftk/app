@@ -9,6 +9,8 @@
   import DialogCloseButton from "$lib/components/dialog/DialogCloseButton.svelte";
   import ControlledCheckbox from "$lib/components/input/ControlledCheckbox.svelte";
 
+  import { getServerContext } from "../ServerProvider.svelte";
+
   type Props = {
     selected: string[];
     onChangeSelect: (selected: string[]) => void;
@@ -18,6 +20,7 @@
 
   let search = $state("");
 
+  const serverContext = getServerContext();
   const itemsQuery = createItemsQuery();
 
   const items = $derived($itemsQuery.data ?? []);
@@ -90,7 +93,7 @@
               <div class="throwable__image-wrapper">
                 <img
                   class="throwable__image"
-                  src={getBackendURL(item.config.image.src)}
+                  src={getBackendURL(serverContext, item.config.image.src)}
                   alt="Throwable"
                 />
               </div>
@@ -119,7 +122,7 @@
             <div class="grid-item__image throwable__image-wrapper">
               <img
                 class="throwable__image"
-                src={getBackendURL(option.config.image.src)}
+                src={getBackendURL(serverContext, option.config.image.src)}
                 alt="Throwable"
               />
             </div>

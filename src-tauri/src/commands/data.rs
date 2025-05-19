@@ -11,6 +11,7 @@ use crate::{
         },
         DbPool,
     },
+    http::ServerPort,
     overlay::{OverlayData, OverlayDataStore, OverlayMessage, OverlayMessageSender},
     storage::{Storage, StorageFolder},
 };
@@ -27,8 +28,8 @@ pub fn update_hotkeys(event_sender: tauri::State<'_, OverlayMessageSender>) -> C
 
 /// Obtains the current URL for the OBS overlay
 #[tauri::command]
-pub async fn get_overlay_url(db: tauri::State<'_, DbPool>) -> CmdResult<String> {
-    let http_port = AppDataModel::get_http_port(db.inner()).await?;
+pub fn get_overlay_url(port_state: State<'_, ServerPort>) -> CmdResult<String> {
+    let http_port = port_state.inner().0;
     Ok(format!("http://localhost:{}/overlay", http_port))
 }
 
@@ -100,4 +101,10 @@ pub async fn get_logs_estimate_size(db: tauri::State<'_, DbPool>) -> CmdResult<u
     )?;
 
     Ok(command_size.saturating_add(event_size))
+}
+
+/// Get the current HTTP server port
+#[tauri::command]
+pub fn get_http_port(port_state: State<'_, ServerPort>) -> CmdResult<u16> {
+    Ok(port_state.inner().0)
 }

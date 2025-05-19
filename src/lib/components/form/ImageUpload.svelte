@@ -1,6 +1,8 @@
 <script lang="ts">
   import getBackendURL from "$lib/utils/url";
 
+  import { getServerContext } from "../ServerProvider.svelte";
+
   type Props = {
     id: string;
     name: string;
@@ -14,6 +16,7 @@
   };
 
   const { id, name, value, pixelated, scale, onChange }: Props = $props();
+  const serverContext = getServerContext();
 
   let inputElm: HTMLInputElement | undefined = $state();
   let currentImage = $state(
@@ -87,7 +90,7 @@
         <img
           class="image-preview"
           class:image-preview--pixelate={pixelated}
-          src={getBackendURL(currentImage)}
+          src={getBackendURL(serverContext, currentImage)}
           alt="Preview"
           style="transform: scale({scale});"
         />

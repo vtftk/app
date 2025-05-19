@@ -4,6 +4,7 @@
   import Button from "../input/Button.svelte";
   import FormErrorLabel from "./FormErrorLabel.svelte";
   import SoundPreview from "../sounds/SoundPreview.svelte";
+  import { getServerContext } from "../ServerProvider.svelte";
 
   type Props = {
     id: string;
@@ -19,6 +20,8 @@
   };
 
   const { id, name, label, existing, volume, onChangeSound }: Props = $props();
+
+  const serverContext = getServerContext();
 
   let inputElm: HTMLInputElement | undefined = $state();
   let currentSound = $state(existing);
@@ -50,7 +53,7 @@
 
   <div class="sound-preview-wrapper">
     {#if currentSound !== undefined}
-      <SoundPreview src={getBackendURL(currentSound)} {volume} />
+      <SoundPreview src={getBackendURL(serverContext, currentSound)} {volume} />
     {/if}
   </div>
 

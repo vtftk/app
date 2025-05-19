@@ -13,6 +13,7 @@
   import BallIcon from "~icons/solar/basketball-bold-duotone";
   import LinkButton from "$lib/components/input/LinkButton.svelte";
   import PopoverButton from "$lib/components/popover/PopoverButton.svelte";
+  import { getServerContext } from "$lib/components/ServerProvider.svelte";
   import ControlledCheckbox from "$lib/components/input/ControlledCheckbox.svelte";
   import { confirmDialog } from "$lib/components/dialog/GlobalConfirmDialog.svelte";
   import PopoverCloseButton from "$lib/components/popover/PopoverCloseButton.svelte";
@@ -38,6 +39,7 @@
   }: Props = $props();
 
   const deleteItem = deleteItemMutation();
+  const serverContext = getServerContext();
 
   async function onDelete() {
     const confirm = await confirmDialog({
@@ -95,7 +97,7 @@
       <img
         class="item__image"
         class:item__image--pixelate={config.config.image.pixelate}
-        src={getBackendURL(config.config.image.src)}
+        src={getBackendURL(serverContext, config.config.image.src)}
         alt="Throwable"
         loading="lazy"
       />

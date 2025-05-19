@@ -12,6 +12,7 @@
   import SolarMenuDotsBold from "~icons/solar/menu-dots-bold";
   import LinkButton from "$lib/components/input/LinkButton.svelte";
   import PopoverButton from "$lib/components/popover/PopoverButton.svelte";
+  import { getServerContext } from "$lib/components/ServerProvider.svelte";
   import SoundPlayButton from "$lib/components/sounds/SoundPlayButton.svelte";
   import ControlledCheckbox from "$lib/components/input/ControlledCheckbox.svelte";
   import { confirmDialog } from "$lib/components/dialog/GlobalConfirmDialog.svelte";
@@ -23,6 +24,7 @@
     onToggleSelected: VoidFunction;
   };
 
+  const serverContext = getServerContext();
   const appContext = getAppContext();
   const appData = $derived(appContext.appData);
 
@@ -51,7 +53,7 @@
 {#snippet popoverContent()}
   <SoundPlayButton
     showText
-    src={getBackendURL(config.src)}
+    src={getBackendURL(serverContext, config.src)}
     volume={config.volume * appData.sounds_config.global_volume}
   />
   <LinkButton href="/sounds/{config.id}">

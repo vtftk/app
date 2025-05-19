@@ -38,3 +38,7 @@ export function getExecutionsEstimateSize() {
 export function getLogsEstimateSize() {
   return invoke<number>("get_logs_estimate_size");
 }
+
+export function getServerPort() {
+  return invoke<number>("get_http_port");
+}

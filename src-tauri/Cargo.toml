@@ -23,6 +23,12 @@ tauri-plugin-shell = "2.2.0"
 tauri-plugin-single-instance = "2.2.0"
 tauri-plugin-updater = "2"
 
+# File dialogs for file picker prompts
+rfd = { version = "0.15.3", default-features = false, features = [
+    "tokio",
+    "xdg-portal",
+] }
+
 # Twitch API for working with twitch
 twitch_api = { version = "0.7.0", features = [
     "helix",
