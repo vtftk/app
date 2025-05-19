@@ -43,7 +43,9 @@ pub async fn icon() -> impl IntoResponse {
 ///
 /// Get the overlay configuration data
 pub async fn get_overlay_config(Extension(db): Extension<DbPool>) -> HttpResult<OverlayConfig> {
-    let data = AppDataModel::get_or_default(&db).await?;
+    let data = AppDataModel::get_or_default(&db)
+        .await
+        .context("failed to get overlay model")?;
     Ok(Json(data.overlay))
 }
 

@@ -1,13 +1,8 @@
+use crate::database::{DbErr, DbPool, DbResult};
 use chrono::{DateTime, Utc};
-use sea_query::{Alias, Expr, Func, IdenStatic, OnConflict, Query};
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use twitch_api::{helix::Scope, twitch_oauth2::AccessToken};
-
-use crate::database::{
-    helpers::{sql_exec, sql_query_maybe_one},
-    DbPool,
-};
 
 #[derive(Clone, Debug, Serialize, Deserialize, FromRow)]
 pub struct AppDataModel {
@@ -16,18 +11,6 @@ pub struct AppDataModel {
     pub data: AppData,
     pub created_at: DateTime<Utc>,
     pub last_modified_at: DateTime<Utc>,
-}
-
-#[derive(IdenStatic, Copy, Clone)]
-#[iden(rename = "app_data")]
-pub struct AppDataTable;
-
-#[derive(IdenStatic, Copy, Clone)]
-pub enum AppDataColumn {
-    Id,
-    Data,
-    CreatedAt,
-    LastModifiedAt,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -254,7 +237,7 @@ impl AppDataModel {
     /// Only one row should ever be created and should have this ID
     const SINGLETON_ID: i32 = 1;
 
-    pub async fn set(db: &DbPool, app_data: AppData) -> anyhow::Result<AppDataModel> {
+    pub async fn set(db: &DbPool, app_data: AppData) -> DbResult<AppDataModel> {
         let model = AppDataModel {
             id: Self::SINGLETON_ID,
             data: app_data,
@@ -262,50 +245,34 @@ impl AppDataModel {
             last_modified_at: Utc::now(),
         };
 
-        let data_value = serde_json::to_value(&model.data)?;
+        let data_value =
+            serde_json::to_value(&model.data).map_err(|err| DbErr::Encode(err.into()))?;
 
-        sql_exec(
-            db,
-            Query::insert()
-                .into_table(AppDataTable)
-                .columns([
-                    AppDataColumn::Id,
-                    AppDataColumn::Data,
-                    AppDataColumn::CreatedAt,
-                    AppDataColumn::LastModifiedAt,
-                ])
-                .values_panic([
-                    model.id.into(),
-                    data_value.into(),
-                    model.created_at.into(),
-                    model.last_modified_at.into(),
-                ])
-                .on_conflict(
-                    OnConflict::new()
-                        .update_column(AppDataColumn::Data)
-                        .update_column(AppDataColumn::LastModifiedAt)
-                        .to_owned(),
-                ),
+        sqlx::query(
+            r#"
+            INSERT INTO "app_data" ("id", "data", "created_at", "last_modified_at") 
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(Id) DO UPDATE SET
+                "data" = excluded."data",
+                "last_modified_at" = excluded."last_modified_at"
+            "#,
         )
+        .bind(model.id)
+        .bind(data_value)
+        .bind(model.created_at)
+        .bind(model.last_modified_at)
+        .execute(db)
         .await?;
 
         Ok(model)
     }
 
-    pub async fn get_or_default(db: &DbPool) -> anyhow::Result<AppData> {
-        let result: Option<AppDataModel> = sql_query_maybe_one(
-            db,
-            Query::select()
-                .from(AppDataTable)
-                .columns([
-                    AppDataColumn::Id,
-                    AppDataColumn::Data,
-                    AppDataColumn::CreatedAt,
-                    AppDataColumn::LastModifiedAt,
-                ])
-                .and_where(Expr::col(AppDataColumn::Id).add(Self::SINGLETON_ID)),
-        )
-        .await?;
+    pub async fn get_or_default(db: &DbPool) -> DbResult<AppData> {
+        let result: Option<AppDataModel> =
+            sqlx::query_as(r#"SELECT * FROM "app_data" WHERE "id" = ?"#)
+                .bind(Self::SINGLETON_ID)
+                .fetch_optional(db)
+                .await?;
 
         let model = match result {
             Some(value) => value,
@@ -317,18 +284,17 @@ impl AppDataModel {
 
     /// HTTP port is loaded pretty frequently
     #[cfg_attr(debug_assertions, allow(unused))]
-    pub async fn get_http_port(db: &DbPool) -> anyhow::Result<u16> {
-        let result: Option<(u16,)> = sql_query_maybe_one(
-            db,
-            Query::select()
-                .from(AppDataTable)
-                // Select
-                .expr(Func::coalesce([
-                    Expr::cust("json_extract(data, '$.main_config.http_port')"),
-                    Expr::value(default_http_port()),
-                ]))
-                .and_where(Expr::col(AppDataColumn::Id).add(Self::SINGLETON_ID)),
+    pub async fn get_http_port(db: &DbPool) -> DbResult<u16> {
+        let result: Option<(u16,)> = sqlx::query_as(
+            r#"
+            SELECT COALESCE(JSON_EXTRACT(data, '$.main_config.http_port'), ?) 
+            FROM "app_data"
+            WHERE "id" = ?
+        "#,
         )
+        .bind(default_http_port())
+        .bind(Self::SINGLETON_ID)
+        .fetch_optional(db)
         .await?;
 
         // HTTP port is loaded frequently so save on loading the entire main_config every time
@@ -336,26 +302,19 @@ impl AppDataModel {
         Ok(http_port)
     }
 
-    pub async fn get_main_config(db: &DbPool) -> anyhow::Result<MainConfig> {
-        #[derive(FromRow)]
-        struct PartialModel {
-            #[sqlx(json)]
-            main_config: MainConfig,
-        }
-
-        let result: Option<PartialModel> = sql_query_maybe_one(
-            db,
-            Query::select()
-                .from(AppDataTable)
-                // Select
-                .expr_as(
-                    Expr::cust("json_extract(data, '$.main_config')"),
-                    Alias::new("main_config"),
-                )
-                .and_where(Expr::col(AppDataColumn::Id).add(Self::SINGLETON_ID)),
+    pub async fn get_main_config(db: &DbPool) -> DbResult<MainConfig> {
+        let result: Option<(sqlx::types::Json<MainConfig>,)> = sqlx::query_as(
+            r#"
+            SELECT JSON_EXTRACT(data, '$.main_config') 
+            FROM "app_data"
+            WHERE "id" = ?
+        "#,
         )
+        .bind(default_http_port())
+        .bind(Self::SINGLETON_ID)
+        .fetch_optional(db)
         .await?;
 
-        Ok(result.map(|value| value.main_config).unwrap_or_default())
+        Ok(result.map(|(value,)| value.0).unwrap_or_default())
     }
 }
