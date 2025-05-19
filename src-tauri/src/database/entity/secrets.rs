@@ -29,7 +29,7 @@ impl SecretsModel {
             r#"
             INSERT INTO "secrets" ("key", "value", "metadata", "created_at")
             VALUES (?, ?, ?, ?)
-            ON CONFLICT(Id) DO UPDATE SET
+            ON CONFLICT("key") DO UPDATE SET
                 "value" = excluded."value",
                 "metadata" = excluded."metadata",
                 "created_at" = excluded."created_at"

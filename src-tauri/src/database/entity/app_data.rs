@@ -252,7 +252,7 @@ impl AppDataModel {
             r#"
             INSERT INTO "app_data" ("id", "data", "created_at", "last_modified_at") 
             VALUES (?, ?, ?, ?)
-            ON CONFLICT(Id) DO UPDATE SET
+            ON CONFLICT("id") DO UPDATE SET
                 "data" = excluded."data",
                 "last_modified_at" = excluded."last_modified_at"
             "#,
