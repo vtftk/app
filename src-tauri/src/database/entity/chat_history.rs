@@ -1,14 +1,10 @@
 use chrono::{DateTime, Utc};
-use sea_query::{Asterisk, Expr, Func, IdenStatic, Query};
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use twitch_api::types::UserId;
 use uuid::Uuid;
 
-use crate::database::{
-    helpers::{sql_exec, sql_query_one_single},
-    DbPool, DbResult,
-};
+use crate::database::{DbPool, DbResult};
 
 #[derive(Clone, Debug, Serialize, Deserialize, FromRow)]
 pub struct ChatHistoryModel {
@@ -41,40 +37,25 @@ pub struct CreateChatHistory {
 impl ChatHistoryModel {
     /// Create a new chat history item
     pub async fn create(db: &DbPool, create: CreateChatHistory) -> DbResult<()> {
-        sql_exec(
-            db,
-            Query::insert()
-                .into_table(ChatHistoryTable)
-                .columns([
-                    ChatHistoryColumn::Id,
-                    ChatHistoryColumn::UserId,
-                    ChatHistoryColumn::Message,
-                    ChatHistoryColumn::Cheer,
-                    ChatHistoryColumn::CreatedAt,
-                ])
-                .values_panic([
-                    create.id.into(),
-                    create.user_id.into(),
-                    create.message.into(),
-                    create.cheer.into(),
-                    create.created_at.into(),
-                ]),
+        sqlx::query(
+            r#"INSERT INTO "chat_history" ("id", "user_id", "message", "cheer", "created_at") VALUES (?, ?, ?, ?, ?)"#,
         )
-        .await
+        .bind(create.id)
+        .bind(create.user_id)
+        .bind(create.message)
+        .bind(create.cheer)
+        .bind(create.created_at)
+        .execute(db).await?;
+        Ok(())
     }
 
     /// Estimates the size in bytes that the current chat history is taking up
     pub async fn estimate_size(db: &DbPool) -> DbResult<u32> {
-        sql_query_one_single(
-            db,
-            Query::select().from(ChatHistoryTable).expr(Func::coalesce([
-                // Get total length of all metadata text
-                Func::sum(Func::char_length(Expr::col(ChatHistoryColumn::Message))).into(),
-                // Fallback to zero
-                Expr::value(0),
-            ])),
-        )
-        .await
+        let result: (u32,) =
+            sqlx::query_as(r#"SELECT COALESCE(SUM(LENGTH("message")), 0) FROM "chat_history" "#)
+                .fetch_one(db)
+                .await?;
+        Ok(result.0)
     }
 
     /// Get the number of chat history messages since `start_date` excluding those
@@ -84,46 +65,32 @@ impl ChatHistoryModel {
         start_date: DateTime<Utc>,
         exclude_id: Option<UserId>,
     ) -> DbResult<u32> {
-        sql_query_one_single(
-            db,
-            Query::select()
-                .from(ChatHistoryTable)
-                .expr(Func::count(Expr::col(Asterisk)))
-                .and_where(Expr::col(ChatHistoryColumn::CreatedAt).gt(Expr::value(start_date)))
-                .and_where_option(exclude_id.map(|exclude_id| {
-                    Expr::col(ChatHistoryColumn::UserId).ne(exclude_id.as_str())
-                })),
-        )
-        .await
+        let result: (u32,) = if let Some(exclude_id) = exclude_id {
+            sqlx::query_as(
+                r#"SELECT * FROM "chat_history" WHERE "created_at" > ? AND "user_id" != ?"#,
+            )
+            .bind(start_date)
+            .bind(exclude_id.as_str())
+            .fetch_one(db)
+            .await?
+        } else {
+            sqlx::query_as(r#"SELECT COUNT(*) FROM "chat_history" WHERE "created_at" > ?"#)
+                .bind(start_date)
+                .fetch_one(db)
+                .await?
+        };
+
+        Ok(result.0)
     }
 
     /// Deletes all chat history that happened before the provided `start_time`.
     /// Used to clean out old chat history
     pub async fn delete_before(db: &DbPool, start_date: DateTime<Utc>) -> DbResult<()> {
-        sql_exec(
-            db,
-            Query::delete()
-                .from_table(ChatHistoryTable)
-                .and_where(Expr::col(ChatHistoryColumn::CreatedAt).lt(start_date)),
-        )
-        .await
+        sqlx::query(r#"DELETE FROM "chat_history" WHERE "created_at" < ?"#)
+            .bind(start_date)
+            .execute(db)
+            .await?;
+
+        Ok(())
     }
-}
-
-#[derive(IdenStatic, Copy, Clone)]
-#[iden(rename = "chat_history")]
-pub struct ChatHistoryTable;
-
-#[derive(IdenStatic, Copy, Clone)]
-pub enum ChatHistoryColumn {
-    /// Twitch message ID
-    Id,
-    /// Twitch user ID
-    UserId,
-    /// Twitch message
-    Message,
-    /// Associated cheer amount (Optional)
-    Cheer,
-    /// Creation time of the chat message
-    CreatedAt,
 }
