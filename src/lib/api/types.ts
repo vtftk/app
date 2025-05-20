@@ -451,7 +451,6 @@ export type UpdateSound = {
     name: string;
     src: string;
     volume: number;
-    order: number;
   }>;
 };
 
