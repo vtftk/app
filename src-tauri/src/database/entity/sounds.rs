@@ -209,9 +209,9 @@ impl SoundModel {
 
     pub async fn update_order(db: &DbPool, data: Vec<UpdateOrdering>) -> DbResult<()> {
         for order_chunk in data.chunks(1000) {
-            let cases = std::iter::repeat("WHEN ? = ?")
+            let cases = std::iter::repeat("WHEN ? THEN ?")
                 .take(order_chunk.len())
-                .join(",");
+                .join(" ");
 
             let sql = format!(
                 r#"
