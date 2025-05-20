@@ -1,14 +1,9 @@
-use sea_query::{Expr, IdenStatic, Order, Query};
+use super::commands::CommandModel;
+use crate::database::{DbPool, DbResult};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use uuid::Uuid;
-
-use crate::database::{
-    helpers::{sql_exec, sql_query_all},
-    DbPool, DbResult,
-};
-
-use super::commands::CommandModel;
 
 #[derive(Clone, Debug, Serialize, Deserialize, FromRow)]
 pub struct CommandAliasModel {
@@ -29,73 +24,59 @@ pub struct CommandWithAliases {
     pub aliases: Vec<String>,
 }
 
-#[derive(IdenStatic, Copy, Clone)]
-#[iden(rename = "command_alias")]
-pub struct CommandAliasTable;
-
-#[derive(IdenStatic, Copy, Clone)]
-pub enum CommandAliasColumn {
-    Id,
-    CommandId,
-    Alias,
-    Order,
-}
-
 impl CommandAliasModel {
     /// Get all aliases for a specific command
     pub async fn get_aliases(db: &DbPool, command_id: Uuid) -> DbResult<Vec<String>> {
-        let results: Vec<(String,)> = sql_query_all(
-            db,
-            Query::select()
-                .columns([CommandAliasColumn::Alias])
-                .from(CommandAliasTable)
-                .and_where(Expr::col(CommandAliasColumn::CommandId).eq(command_id))
-                .order_by(CommandAliasColumn::Order, Order::Asc),
+        let results: Vec<(String,)> = sqlx::query_as(
+            r#"SELECT "alias" FROM "command_alias" WHERE "command_id" = ? ORDER BY "order" ASC"#,
         )
+        .bind(command_id)
+        .fetch_all(db)
         .await?;
 
         Ok(results.into_iter().map(|(alias,)| alias).collect())
+    }
+
+    async fn delete_aliases(db: &DbPool, command_id: Uuid) -> DbResult<()> {
+        sqlx::query(r#"DELETE FROM "command_alias" WHERE "command_id" = ?"#)
+            .bind(command_id)
+            .execute(db)
+            .await?;
+
+        Ok(())
     }
 
     /// Sets all the aliases for a specific command
     /// (Removes the previous set and creates the new one)
     pub async fn set_aliases(db: &DbPool, command_id: Uuid, aliases: Vec<String>) -> DbResult<()> {
         // Delete all command aliases for the command
-        sql_exec(
-            db,
-            Query::delete()
-                .from_table(CommandAliasTable)
-                .and_where(Expr::col(CommandAliasColumn::CommandId).eq(command_id)),
-        )
-        .await?;
+        Self::delete_aliases(db, command_id).await?;
 
         // Don't try and insert if theres no data
         if aliases.is_empty() {
             return Ok(());
         }
 
-        // Insert new aliases
-        sql_exec(
-            db,
-            Query::insert()
-                .into_table(CommandAliasTable)
-                .columns([
-                    CommandAliasColumn::Id,
-                    CommandAliasColumn::CommandId,
-                    CommandAliasColumn::Alias,
-                    CommandAliasColumn::Order,
-                ])
-                .values_from_panic(aliases.into_iter().enumerate().map(|(index, alias)| {
-                    [
-                        Uuid::new_v4().into(),
-                        command_id.into(),
-                        alias.into(),
-                        (index as u32).into(),
-                    ]
-                })),
-        )
-        .await?;
+        // Generate the placeholders required to insert values
+        let values_sets = std::iter::repeat("(?,?,?,?)").take(aliases.len()).join(",");
 
+        let sql = format!(
+            r#"INSERT INTO "command_alias" ("id", "command_id", "alias", "order) 
+            VALUES {values_sets}
+            "#
+        );
+
+        let mut query = sqlx::query(&sql);
+
+        for (index, alias) in aliases.into_iter().enumerate() {
+            query = query
+                .bind(Uuid::new_v4())
+                .bind(command_id)
+                .bind(alias)
+                .bind(index as i64);
+        }
+
+        query.execute(db).await?;
         Ok(())
     }
 }
