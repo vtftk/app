@@ -109,7 +109,7 @@ async fn create_migrations_table(db: &DbPool) -> DbResult<()> {
         r#"
         CREATE TABLE IF NOT EXISTS "migrations" (
             "name"	VARCHAR NOT NULL PRIMARY KEY,
-            "applied_at"	datetime_text NOT NULL,
+            "applied_at"	datetime_text NOT NULL
         );
     "#,
     )

@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS "commands" (
 	"command"	TEXT NOT NULL,
 	"config"	json_text NOT NULL,
 	"order"	INTEGER NOT NULL DEFAULT 0,
-	"created_at"	datetime_text NOT NULL,
+	"created_at"	datetime_text NOT NULL
 );  
 
 CREATE INDEX "idx-command-enabled" 
