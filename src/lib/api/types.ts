@@ -469,7 +469,6 @@ export type UpdateItem = {
     config: ItemConfig;
     impact_sounds: SoundId[];
     windup_sounds: SoundId[];
-    order: number;
   }>;
 };
 

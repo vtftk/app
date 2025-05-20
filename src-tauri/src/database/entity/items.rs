@@ -1,15 +1,10 @@
+use super::{shared::UpdateOrdering, sounds::SoundType};
+use crate::database::{DbErr, DbPool, DbResult};
 use chrono::{DateTime, Utc};
-use sea_query::{CaseStatement, Expr, Func, IdenStatic, OnConflict, Order, Query};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use uuid::Uuid;
-
-use crate::database::{
-    helpers::{sql_exec, sql_query_all, sql_query_maybe_one},
-    DbPool, DbResult,
-};
-
-use super::{shared::UpdateOrdering, sounds::SoundType};
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct ItemModel {
@@ -63,7 +58,6 @@ pub struct UpdateItem {
     pub config: Option<ItemConfig>,
     pub impact_sounds: Option<Vec<Uuid>>,
     pub windup_sounds: Option<Vec<Uuid>>,
-    pub order: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -83,17 +77,7 @@ pub struct ItemWithSounds {
 }
 
 impl ItemModel {
-    pub fn columns() -> [ItemsColumn; 5] {
-        [
-            ItemsColumn::Id,
-            ItemsColumn::Name,
-            ItemsColumn::Config,
-            ItemsColumn::Order,
-            ItemsColumn::CreatedAt,
-        ]
-    }
-
-    pub async fn create(db: &DbPool, create: CreateItem) -> anyhow::Result<ItemModel> {
+    pub async fn create(db: &DbPool, create: CreateItem) -> DbResult<ItemModel> {
         let id = Uuid::new_v4();
 
         let model = ItemModel {
@@ -104,27 +88,21 @@ impl ItemModel {
             created_at: Utc::now(),
         };
 
-        let config_value = serde_json::to_value(&model.config)?;
+        let config_value =
+            serde_json::to_value(&model.config).map_err(|err| DbErr::Encode(err.into()))?;
 
-        sql_exec(
-            db,
-            Query::insert()
-                .into_table(ItemsTable)
-                .columns([
-                    ItemsColumn::Id,
-                    ItemsColumn::Name,
-                    ItemsColumn::Config,
-                    ItemsColumn::Order,
-                    ItemsColumn::CreatedAt,
-                ])
-                .values_panic([
-                    model.id.into(),
-                    model.name.clone().into(),
-                    config_value.into(),
-                    model.order.into(),
-                    model.created_at.into(),
-                ]),
+        sqlx::query(
+            r#"
+            INSERT INTO "items" ("id", "name", "config", "order", "created_at")
+            VALUES (?, ?, ?, ?, ?)
+            "#,
         )
+        .bind(model.id)
+        .bind(model.name.as_str())
+        .bind(config_value)
+        .bind(model.order)
+        .bind(model.created_at)
+        .execute(db)
         .await?;
 
         model
@@ -138,28 +116,39 @@ impl ItemModel {
     }
 
     pub async fn all(db: &DbPool) -> DbResult<Vec<ItemModel>> {
-        sql_query_all(
-            db,
-            Query::select()
-                .columns(ItemModel::columns())
-                .from(ItemsTable)
-                .order_by_columns([
-                    (ItemsColumn::Order, Order::Asc),
-                    (ItemsColumn::CreatedAt, Order::Desc),
-                ]),
-        )
-        .await
+        sqlx::query_as(r#"SELECT * FROM "items" ORDER BY "order" ASC, "created_at" DESC"#)
+            .fetch_all(db)
+            .await
     }
 
     pub async fn get_by_id(db: &DbPool, id: Uuid) -> DbResult<Option<ItemModel>> {
-        sql_query_maybe_one(
-            db,
-            Query::select()
-                .columns(ItemModel::columns())
-                .from(ItemsTable)
-                .and_where(Expr::col(ItemsColumn::Id).eq(id)),
-        )
-        .await
+        sqlx::query_as(r#"SELECT * FROM "items" WHERE "id" = ?"#)
+            .bind(id)
+            .fetch_optional(db)
+            .await
+    }
+
+    async fn get_items_sounds(
+        db: &DbPool,
+        item_ids: &[Uuid],
+    ) -> DbResult<Vec<(Uuid, Uuid, SoundType)>> {
+        if item_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let placeholders = std::iter::repeat('?').take(item_ids.len()).join(",");
+        let sql = format!(
+            r#"SELECT "item_id", "sound_id", "sound_type" FROM "items_sounds" WHERE "item_id" IS IN ({placeholders})"#
+        );
+        let mut query = sqlx::query_as(&sql);
+
+        for id in item_ids {
+            query = query.bind(id);
+        }
+
+        let result = query.fetch_all(db).await?;
+
+        Ok(result)
     }
 
     pub async fn with_items_sounds(
@@ -184,18 +173,7 @@ impl ItemModel {
             .collect();
 
         // Lookup the new sounds
-        let rows: Vec<(Uuid, Uuid, SoundType)> = sql_query_all(
-            db,
-            Query::select()
-                .columns([
-                    ItemsSoundsColumn::ItemId,
-                    ItemsSoundsColumn::SoundId,
-                    ItemsSoundsColumn::SoundType,
-                ])
-                .from(ItemsSoundsTable)
-                .and_where(Expr::col(ItemsSoundsColumn::ItemId).is_in(item_ids)),
-        )
-        .await?;
+        let rows: Vec<(Uuid, Uuid, SoundType)> = Self::get_items_sounds(db, &item_ids).await?;
 
         // Connect the items and sounds
         for (item_id, sound_id, sound_type) in rows {
@@ -221,17 +199,62 @@ impl ItemModel {
         db: &DbPool,
         ids: &[Uuid],
     ) -> DbResult<Vec<ItemWithSounds>> {
-        // Request the items
-        let items: Vec<ItemModel> = sql_query_all(
-            db,
-            Query::select()
-                .columns(ItemModel::columns())
-                .from(ItemsTable)
-                .and_where(Expr::col(ItemsColumn::Id).is_in(ids.iter().copied())),
-        )
-        .await?;
-
+        let items = Self::get_by_ids(db, ids).await?;
         Self::with_items_sounds(db, items).await
+    }
+
+    async fn get_by_ids(db: &DbPool, ids: &[Uuid]) -> DbResult<Vec<ItemModel>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let placeholders = std::iter::repeat('?').take(ids.len()).join(",");
+        let sql = format!(r#"SELECT * FROM "items" WHERE "id" IS IN ({placeholders})"#);
+        let mut query = sqlx::query_as(&sql);
+
+        for id in ids {
+            query = query.bind(id);
+        }
+
+        let result = query.fetch_all(db).await?;
+
+        Ok(result)
+    }
+
+    async fn get_by_names(
+        db: &DbPool,
+        names: &[String],
+        ignore_case: bool,
+    ) -> DbResult<Vec<ItemModel>> {
+        if names.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let name_column = if ignore_case {
+            // When ignoring case wrap the name in the LOWER function
+            r#"LOWER("name")"#
+        } else {
+            r#""name""#
+        };
+
+        // Create the value placeholders for the names
+        let placeholders = std::iter::repeat('?').take(names.len()).join(",");
+        let sql = format!(r#"SELECT * FROM "items" WHERE {name_column} IS IN ({placeholders})"#);
+
+        let mut query = sqlx::query_as(&sql);
+
+        if ignore_case {
+            for name in names {
+                query = query.bind(name.to_lowercase());
+            }
+        } else {
+            for name in names {
+                query = query.bind(name);
+            }
+        }
+
+        let result = query.fetch_all(db).await?;
+        Ok(result)
     }
 
     pub async fn get_by_names_with_sounds(
@@ -240,52 +263,26 @@ impl ItemModel {
         ignore_case: bool,
     ) -> DbResult<Vec<ItemWithSounds>> {
         // Request the items
-        let items: Vec<ItemModel> = {
-            let mut select = Query::select();
-
-            select.columns(ItemModel::columns()).from(ItemsTable);
-
-            if ignore_case {
-                select.and_where(
-                    // Convert stored name to lower case
-                    Expr::expr(Func::lower(Expr::col(ItemsColumn::Name)))
-                        // Compare with lowercase value
-                        .is_in(names.iter().map(|value| value.to_lowercase())),
-                );
-            } else {
-                select.and_where(Expr::col(ItemsColumn::Name).is_in(names));
-            };
-
-            sql_query_all(db, &select).await?
-        };
-
+        let items = Self::get_by_names(db, names, ignore_case).await?;
         Self::with_items_sounds(db, items).await
     }
 
     /// Update the current item
     pub async fn update(&mut self, db: &DbPool, data: UpdateItem) -> anyhow::Result<()> {
-        let mut update = Query::update();
-        update
-            .table(ItemsTable)
-            .and_where(Expr::col(ItemsColumn::Id).eq(self.id));
+        let name = data.name.unwrap_or_else(|| self.name.clone());
+        let config = data.config.unwrap_or_else(|| self.config.clone());
+        let config_value =
+            serde_json::to_value(&config).map_err(|err| DbErr::Encode(err.into()))?;
 
-        if let Some(name) = data.name {
-            self.name = name.clone();
-            update.value(ItemsColumn::Name, Expr::value(name));
-        }
+        sqlx::query(r#"UPDATE "items" SET "name" = ?, "config" = ? WHERE "id" = ?"#)
+            .bind(name.as_str())
+            .bind(config_value)
+            .bind(self.id)
+            .execute(db)
+            .await?;
 
-        if let Some(config) = data.config {
-            let config_value = serde_json::to_value(&config)?;
-            self.config = config;
-            update.value(ItemsColumn::Config, Expr::value(config_value));
-        }
-
-        if let Some(order) = data.order {
-            self.order = order;
-            update.value(ItemsColumn::Order, Expr::value(order));
-        }
-
-        sql_exec(db, &update).await?;
+        self.name = name;
+        self.config = config;
 
         if let Some(impact_sounds) = data.impact_sounds {
             self.set_sounds(db, &impact_sounds, SoundType::Impact)
@@ -302,52 +299,53 @@ impl ItemModel {
 
     pub async fn update_order(db: &DbPool, data: Vec<UpdateOrdering>) -> DbResult<()> {
         for order_chunk in data.chunks(1000) {
-            let mut case = CaseStatement::new()
-                // Use the current column value when not specified
-                .finally(Expr::col(ItemsColumn::Order));
+            let cases = std::iter::repeat("WHEN ? = ?")
+                .take(order_chunk.len())
+                .join(",");
 
-            // Add case for all updated values
+            let sql = format!(
+                r#"
+                UPDATE "items"
+                SET "order" = CASE "id"
+                    {cases}
+                    ELSE "order"
+                END
+            "#
+            );
+
+            let mut query = sqlx::query(&sql);
+
             for order in order_chunk {
-                case = case.case(
-                    Expr::col(ItemsColumn::Id).eq(order.id),
-                    Expr::value(order.order),
-                );
+                query = query.bind(order.id).bind(order.order);
             }
 
-            sql_exec(
-                db,
-                Query::update()
-                    .table(ItemsTable)
-                    .value(ItemsColumn::Order, case),
-            )
-            .await?;
+            query.execute(db).await?;
         }
 
         Ok(())
     }
 
-    /// Sets the impact sounds for thsis item
+    /// Sets the impact sounds for this item
     pub async fn set_sounds(
         &self,
         db: &DbPool,
         sound_ids: &[Uuid],
         sound_type: SoundType,
     ) -> DbResult<()> {
-        // Delete any impact sounds not in the provided list
-        sql_exec(
-            db,
-            Query::delete()
-                .from_table(ItemsSoundsTable)
-                .and_where(Expr::col(ItemsSoundsColumn::ItemId).eq(self.id))
-                .and_where(
-                    Expr::col(ItemsSoundsColumn::SoundId).is_not_in(sound_ids.iter().copied()),
-                )
-                .and_where(Expr::col(ItemsSoundsColumn::SoundType).eq(sound_type)),
-        )
-        .await?;
-
+        // Delete any sounds already attached
+        self.delete_sounds_by_type(db, sound_type).await?;
         self.append_sounds(db, sound_ids, sound_type).await?;
 
+        Ok(())
+    }
+
+    /// Delete sounds of a specific type for a specific item
+    async fn delete_sounds_by_type(&self, db: &DbPool, sound_type: SoundType) -> DbResult<()> {
+        sqlx::query(r#"DELETE FROM "items_sounds" WHERE "item_id" = ? OR "sound_type" = ?"#)
+            .bind(self.id)
+            .bind(sound_type)
+            .execute(db)
+            .await?;
         Ok(())
     }
 
@@ -363,32 +361,24 @@ impl ItemModel {
             return Ok(());
         }
 
-        sql_exec(
-            db,
-            Query::insert()
-                .columns([
-                    ItemsSoundsColumn::ItemId,
-                    ItemsSoundsColumn::SoundId,
-                    ItemsSoundsColumn::SoundType,
-                ])
-                .values_from_panic(
-                    sound_ids
-                        .iter()
-                        .copied()
-                        .map(|sound_id| [self.id.into(), sound_id.into(), sound_type.into()]),
-                )
-                .on_conflict(
-                    OnConflict::columns([
-                        ItemsSoundsColumn::ItemId,
-                        ItemsSoundsColumn::SoundId,
-                        ItemsSoundsColumn::SoundType,
-                    ])
-                    .do_nothing()
-                    .to_owned(),
-                )
-                .into_table(ItemsSoundsTable),
-        )
-        .await
+        // Generate the placeholders required to insert values
+        let values_sets = std::iter::repeat("(?,?,?)").take(sound_ids.len()).join(",");
+        let sql = format!(
+            r#"
+            INSERT INTO "items_sounds" ("item_id", "sound_id", "sound_type") 
+            VALUES {values_sets}
+            ON CONFLICT("item_id", "sound_id", "sound_type") DO NOTHING
+            "#
+        );
+
+        let mut query = sqlx::query(&sql);
+
+        for sound_id in sound_ids {
+            query = query.bind(self.id).bind(sound_id).bind(sound_type);
+        }
+
+        query.execute(db).await?;
+        Ok(())
     }
 
     pub async fn with_sounds(self, db: &DbPool) -> DbResult<ItemWithSounds> {
@@ -400,13 +390,11 @@ impl ItemModel {
         };
 
         // Lookup the sounds
-        let rows: Vec<(Uuid, SoundType)> = sql_query_all(
-            db,
-            Query::select()
-                .columns([ItemsSoundsColumn::SoundId, ItemsSoundsColumn::SoundType])
-                .from(ItemsSoundsTable)
-                .and_where(Expr::col(ItemsSoundsColumn::ItemId).eq(item_with_sounds.item.id)),
+        let rows: Vec<(Uuid, SoundType)> = sqlx::query_as(
+            r#"SELECT "sound_id", "sound_type" FROM "items_sounds" WHERE "item_id" = ?"#,
         )
+        .bind(item_with_sounds.item.id)
+        .fetch_all(db)
         .await?;
 
         // Connect the items and sounds
@@ -421,36 +409,11 @@ impl ItemModel {
     }
 
     pub async fn delete(self, db: &DbPool) -> DbResult<()> {
-        sql_exec(
-            db,
-            Query::delete()
-                .from_table(ItemsTable)
-                .and_where(Expr::col(ItemsColumn::Id).eq(self.id)),
-        )
-        .await
+        sqlx::query(r#"DELETE FROM "items" WHERE "id" = ?"#)
+            .bind(self.id)
+            .execute(db)
+            .await?;
+
+        Ok(())
     }
-}
-
-#[derive(IdenStatic, Copy, Clone)]
-#[iden(rename = "items")]
-pub struct ItemsTable;
-
-#[derive(IdenStatic, Copy, Clone)]
-pub enum ItemsColumn {
-    Id,
-    Name,
-    Config,
-    Order,
-    CreatedAt,
-}
-
-#[derive(IdenStatic, Copy, Clone)]
-#[iden(rename = "items_sounds")]
-pub struct ItemsSoundsTable;
-
-#[derive(IdenStatic, Copy, Clone)]
-pub enum ItemsSoundsColumn {
-    ItemId,
-    SoundId,
-    SoundType,
 }

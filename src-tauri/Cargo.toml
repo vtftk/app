@@ -84,6 +84,7 @@ deno_core = "0.323.0"
 chrono = { version = "0.4.39", features = ["serde"] }
 async-trait = "0.1.86"
 strum = { version = "0.27.1", features = ["derive"] }
+itertools = "0.14.0"
 
 [dependencies.sqlx]
 version = "0.8.2"
