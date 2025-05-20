@@ -1,17 +1,13 @@
+use crate::{
+    database::{DbErr, DbPool, DbResult},
+    events::TwitchEventUser,
+};
 use chrono::{DateTime, Utc};
-use sea_query::{Expr, Func, IdenStatic, Order, Query};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use sqlx::prelude::FromRow;
 use uuid::Uuid;
-
-use crate::{
-    database::{
-        helpers::{sql_exec, sql_query_all, sql_query_maybe_one, sql_query_one_single},
-        DbPool, DbResult,
-    },
-    events::TwitchEventUser,
-};
 
 use super::shared::ExecutionsQuery;
 
@@ -44,42 +40,23 @@ pub struct CreateCommandExecution {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(IdenStatic, Copy, Clone)]
-#[iden(rename = "command_executions")]
-pub struct CommandExecutionsTable;
-
-#[derive(IdenStatic, Copy, Clone)]
-pub enum CommandExecutionsColumn {
-    Id,
-    CommandId,
-    Metadata,
-    CreatedAt,
-}
-
 impl CommandExecutionModel {
     /// Create an execution for a specific command
-    pub async fn create(db: &DbPool, create: CreateCommandExecution) -> anyhow::Result<()> {
+    pub async fn create(db: &DbPool, create: CreateCommandExecution) -> DbResult<()> {
         let id = Uuid::new_v4();
 
-        let metadata_value = serde_json::to_value(&create.metadata)?;
+        let metadata_value =
+            serde_json::to_value(&create.metadata).map_err(|err| DbErr::Encode(err.into()))?;
 
-        sql_exec(
-            db,
-            Query::insert()
-                .into_table(CommandExecutionsTable)
-                .columns([
-                    CommandExecutionsColumn::Id,
-                    CommandExecutionsColumn::CommandId,
-                    CommandExecutionsColumn::Metadata,
-                    CommandExecutionsColumn::CreatedAt,
-                ])
-                .values_panic([
-                    id.into(),
-                    create.command_id.into(),
-                    metadata_value.into(),
-                    create.created_at.into(),
-                ]),
+        sqlx::query(
+            r#"INSERT INTO "command_executions" ("id", "command_id", "metadata", "created_at")
+            VALUES (?, ?, ?, ?)"#,
         )
+        .bind(id)
+        .bind(create.command_id)
+        .bind(metadata_value)
+        .bind(create.created_at)
+        .execute(db)
         .await?;
 
         Ok(())
@@ -92,21 +69,14 @@ impl CommandExecutionModel {
         command_id: Uuid,
         offset: u64,
     ) -> DbResult<Option<CommandExecutionModel>> {
-        sql_query_maybe_one(
-            db,
-            Query::select()
-                .from(CommandExecutionsTable)
-                .columns([
-                    CommandExecutionsColumn::Id,
-                    CommandExecutionsColumn::CommandId,
-                    CommandExecutionsColumn::Metadata,
-                    CommandExecutionsColumn::CreatedAt,
-                ])
-                .and_where(Expr::col(CommandExecutionsColumn::CommandId).eq(command_id))
-                .offset(offset)
-                .limit(1)
-                .order_by(CommandExecutionsColumn::CreatedAt, Order::Desc),
+        sqlx::query_as(
+            r#"SELECT * FROM "command_executions" 
+            WHERE "command_id" = ? 
+            ORDER BY "created_at" DESC OFFSET ? LIMIT 1"#,
         )
+        .bind(command_id)
+        .bind(offset as i64)
+        .fetch_optional(db)
         .await
     }
 
@@ -114,76 +84,82 @@ impl CommandExecutionModel {
     pub async fn query(
         db: &DbPool,
         command_id: Uuid,
-        query: ExecutionsQuery,
+        input: ExecutionsQuery,
     ) -> DbResult<Vec<CommandExecutionModel>> {
-        let mut select = Query::select();
-        select
-            .from(CommandExecutionsTable)
-            .columns([
-                CommandExecutionsColumn::Id,
-                CommandExecutionsColumn::CommandId,
-                CommandExecutionsColumn::Metadata,
-                CommandExecutionsColumn::CreatedAt,
-            ])
-            .and_where(Expr::col(CommandExecutionsColumn::CommandId).eq(command_id))
-            .and_where_option(
-                query
-                    .start_date
-                    .map(|start_date| Expr::col(CommandExecutionsColumn::CreatedAt).gt(start_date)),
-            )
-            .and_where_option(
-                query
-                    .end_date
-                    .map(|end_date| Expr::col(CommandExecutionsColumn::CreatedAt).lt(end_date)),
-            )
-            .order_by(CommandExecutionsColumn::CreatedAt, Order::Desc);
+        let condition = std::iter::once(r#""command_id" = ?"#)
+            // Filter from start date
+            .chain(input.start_date.map(|_| r#"WHERE "created_at" >= ?"#))
+            // Filter from end date
+            .chain(input.end_date.map(|_| r#"WHERE "created_at" <= ?"#))
+            // Join into condition
+            .join(" OR ");
 
-        if let (Some(offset), Some(limit)) = (query.offset, query.limit) {
-            select.offset(offset).limit(limit);
+        let offset = if input.offset.is_some() && input.limit.is_some() {
+            "OFFSET ? LIMIT ?"
+        } else {
+            ""
+        };
+
+        let sql = format!(
+            r#"SELECT * FROM "command_executions" WHERE {condition} {offset} 
+            ORDER BY "created_at" DESC"#
+        );
+
+        let mut query = sqlx::query_as(&sql)
+            // Bind event ID
+            .bind(command_id);
+
+        if let Some(start_date) = input.start_date {
+            query = query.bind(start_date)
         }
 
-        sql_query_all(db, &select).await
+        if let Some(end_date) = input.end_date {
+            query = query.bind(end_date)
+        }
+
+        if let (Some(offset), Some(limit)) = (input.offset, input.limit) {
+            query = query.bind(offset as i64).bind(limit as i64)
+        }
+
+        query.fetch_all(db).await
     }
 
     /// Deletes all executions that happened before the provided `start_time`.
     /// Used to clean out old executions
     pub async fn delete_before(db: &DbPool, start_date: DateTime<Utc>) -> DbResult<()> {
-        sql_exec(
-            db,
-            Query::delete()
-                .from_table(CommandExecutionsTable)
-                .and_where(Expr::col(CommandExecutionsColumn::CreatedAt).lt(start_date)),
-        )
-        .await
+        sqlx::query(r#"DELETE FROM "command_executions" WHERE "created_at" < ?"#)
+            .bind(start_date)
+            .execute(db)
+            .await?;
+
+        Ok(())
     }
 
     /// Deletes a collection of specific executions by ID
     pub async fn delete_by_ids(db: &DbPool, ids: &[Uuid]) -> DbResult<()> {
-        sql_exec(
-            db,
-            Query::delete()
-                .from_table(CommandExecutionsTable)
-                .and_where(Expr::col(CommandExecutionsColumn::Id).is_in(ids.iter().copied())),
-        )
-        .await
+        if ids.is_empty() {
+            return Ok(());
+        }
+
+        let placeholders = std::iter::repeat('?').take(ids.len()).join(",");
+        let sql = format!(r#"DELETE FROM "command_executions" WHERE "id" IS IN ({placeholders})"#);
+        let mut query = sqlx::query(&sql);
+
+        for id in ids {
+            query = query.bind(id);
+        }
+
+        query.execute(db).await?;
+        Ok(())
     }
 
     /// Estimate the size of all execution metadata in the database
     pub async fn estimated_size(db: &DbPool) -> DbResult<u32> {
-        sql_query_one_single(
-            db,
-            Query::select()
-                .from(CommandExecutionsTable)
-                .expr(Func::coalesce([
-                    // Get total length of all metadata text
-                    Func::sum(Func::char_length(Expr::col(
-                        CommandExecutionsColumn::Metadata,
-                    )))
-                    .into(),
-                    // Fallback to zero
-                    Expr::value(0),
-                ])),
+        let result: (u32,) = sqlx::query_as(
+            r#"SELECT COALESCE(SUM(LENGTH("metadata")), 0) FROM "command_executions""#,
         )
-        .await
+        .fetch_one(db)
+        .await?;
+        Ok(result.0)
     }
 }
