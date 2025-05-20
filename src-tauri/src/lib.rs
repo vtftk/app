@@ -122,9 +122,6 @@ fn setup(app: &mut App) -> Result<(), Box<dyn Error>> {
     let db = block_on(database::connect_database(app_data_path.join("app.db")))
         .context("failed to load database")?;
 
-    #[cfg(debug_assertions)]
-    let http_port = 58372;
-    #[cfg(not(debug_assertions))]
     let http_port = block_on(AppDataModel::get_http_port(&db))
         .unwrap_or(database::entity::app_data::default_http_port());
 
