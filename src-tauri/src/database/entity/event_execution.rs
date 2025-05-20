@@ -1,31 +1,14 @@
+use super::shared::ExecutionsQuery;
+use crate::{
+    database::{DbErr, DbPool, DbResult},
+    events::TwitchEventUser,
+};
 use chrono::{DateTime, Utc};
-use sea_query::{Expr, Func, IdenStatic, Order, Query};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use sqlx::prelude::FromRow;
 use uuid::Uuid;
-
-use crate::{
-    database::{
-        helpers::{sql_exec, sql_query_all, sql_query_maybe_one, sql_query_one_single},
-        DbPool, DbResult,
-    },
-    events::TwitchEventUser,
-};
-
-use super::shared::ExecutionsQuery;
-
-#[derive(IdenStatic, Copy, Clone)]
-#[iden(rename = "event_executions")]
-pub struct EventExecutionsTable;
-
-#[derive(IdenStatic, Copy, Clone)]
-pub enum EventExecutionsColumn {
-    Id,
-    EventId,
-    Metadata,
-    CreatedAt,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct EventExecutionModel {
@@ -57,27 +40,20 @@ pub struct CreateEventExecution {
 
 impl EventExecutionModel {
     /// Create a execution for a specific event
-    pub async fn create(db: &DbPool, create: CreateEventExecution) -> anyhow::Result<()> {
+    pub async fn create(db: &DbPool, create: CreateEventExecution) -> DbResult<()> {
         let id = Uuid::new_v4();
-        let metadata_value = serde_json::to_value(&create.metadata)?;
+        let metadata_value =
+            serde_json::to_value(&create.metadata).map_err(|err| DbErr::Encode(err.into()))?;
 
-        sql_exec(
-            db,
-            Query::insert()
-                .into_table(EventExecutionsTable)
-                .columns([
-                    EventExecutionsColumn::Id,
-                    EventExecutionsColumn::EventId,
-                    EventExecutionsColumn::Metadata,
-                    EventExecutionsColumn::CreatedAt,
-                ])
-                .values_panic([
-                    id.into(),
-                    create.event_id.into(),
-                    metadata_value.into(),
-                    create.created_at.into(),
-                ]),
+        sqlx::query(
+            r#"INSERT INTO "event_executions" ("id", "event_id", "metadata", "created_at")
+            VALUES (?, ?, ?, ?)"#,
         )
+        .bind(id)
+        .bind(create.event_id)
+        .bind(metadata_value)
+        .bind(create.created_at)
+        .execute(db)
         .await?;
 
         Ok(())
@@ -90,21 +66,14 @@ impl EventExecutionModel {
         event_id: Uuid,
         offset: u64,
     ) -> DbResult<Option<EventExecutionModel>> {
-        sql_query_maybe_one(
-            db,
-            Query::select()
-                .from(EventExecutionsTable)
-                .columns([
-                    EventExecutionsColumn::Id,
-                    EventExecutionsColumn::EventId,
-                    EventExecutionsColumn::Metadata,
-                    EventExecutionsColumn::CreatedAt,
-                ])
-                .and_where(Expr::col(EventExecutionsColumn::EventId).eq(event_id))
-                .offset(offset)
-                .limit(1)
-                .order_by(EventExecutionsColumn::CreatedAt, Order::Desc),
+        sqlx::query_as(
+            r#"SELECT * FROM "event_executions" 
+            WHERE "event_id" = ? 
+            ORDER BY "created_at" DESC OFFSET ? LIMIT 1"#,
         )
+        .bind(event_id)
+        .bind(offset as i64)
+        .fetch_optional(db)
         .await
     }
 
@@ -112,76 +81,82 @@ impl EventExecutionModel {
     pub async fn query(
         db: &DbPool,
         event_id: Uuid,
-        query: ExecutionsQuery,
+        input: ExecutionsQuery,
     ) -> DbResult<Vec<EventExecutionModel>> {
-        let mut select = Query::select();
-        select
-            .from(EventExecutionsTable)
-            .columns([
-                EventExecutionsColumn::Id,
-                EventExecutionsColumn::EventId,
-                EventExecutionsColumn::Metadata,
-                EventExecutionsColumn::CreatedAt,
-            ])
-            .and_where(Expr::col(EventExecutionsColumn::EventId).eq(event_id))
-            .and_where_option(
-                query
-                    .start_date
-                    .map(|start_date| Expr::col(EventExecutionsColumn::CreatedAt).gt(start_date)),
-            )
-            .and_where_option(
-                query
-                    .end_date
-                    .map(|end_date| Expr::col(EventExecutionsColumn::CreatedAt).lt(end_date)),
-            )
-            .order_by(EventExecutionsColumn::CreatedAt, Order::Desc);
+        let condition = std::iter::once(r#""event_id" = ?"#)
+            // Filter from start date
+            .chain(input.start_date.map(|_| r#"WHERE "created_at" >= ?"#))
+            // Filter from end date
+            .chain(input.end_date.map(|_| r#"WHERE "created_at" <= ?"#))
+            // Join into condition
+            .join(" OR ");
 
-        if let (Some(offset), Some(limit)) = (query.offset, query.limit) {
-            select.offset(offset).limit(limit);
+        let offset = if input.offset.is_some() && input.limit.is_some() {
+            "OFFSET ? LIMIT ?"
+        } else {
+            ""
+        };
+
+        let sql = format!(
+            r#"SELECT * FROM "event_executions" WHERE {condition} {offset} 
+            ORDER BY "created_at" DESC"#
+        );
+
+        let mut query = sqlx::query_as(&sql)
+            // Bind event ID
+            .bind(event_id);
+
+        if let Some(start_date) = input.start_date {
+            query = query.bind(start_date)
         }
 
-        sql_query_all(db, &select).await
+        if let Some(end_date) = input.end_date {
+            query = query.bind(end_date)
+        }
+
+        if let (Some(offset), Some(limit)) = (input.offset, input.limit) {
+            query = query.bind(offset as i64).bind(limit as i64)
+        }
+
+        query.fetch_all(db).await
     }
 
     /// Deletes all executions that happened before the provided `start_time`.
     /// Used to clean out old executions
     pub async fn delete_before(db: &DbPool, start_date: DateTime<Utc>) -> DbResult<()> {
-        sql_exec(
-            db,
-            Query::delete()
-                .from_table(EventExecutionsTable)
-                .and_where(Expr::col(EventExecutionsColumn::CreatedAt).lt(start_date)),
-        )
-        .await
+        sqlx::query(r#"DELETE FROM "event_executions" WHERE "created_at" < ?"#)
+            .bind(start_date)
+            .execute(db)
+            .await?;
+
+        Ok(())
     }
 
     /// Deletes a collection of specific executions by ID
     pub async fn delete_by_ids(db: &DbPool, ids: &[Uuid]) -> DbResult<()> {
-        sql_exec(
-            db,
-            Query::delete()
-                .from_table(EventExecutionsTable)
-                .and_where(Expr::col(EventExecutionsColumn::Id).is_in(ids.iter().copied())),
-        )
-        .await
+        if ids.is_empty() {
+            return Ok(());
+        }
+
+        let placeholders = std::iter::repeat('?').take(ids.len()).join(",");
+        let sql = format!(r#"DELETE FROM "event_executions" WHERE "id" IS IN ({placeholders})"#);
+        let mut query = sqlx::query(&sql);
+
+        for id in ids {
+            query = query.bind(id);
+        }
+
+        query.execute(db).await?;
+        Ok(())
     }
 
     /// Estimate the size of all execution metadata in the database
     pub async fn estimated_size(db: &DbPool) -> DbResult<u32> {
-        sql_query_one_single(
-            db,
-            Query::select()
-                .from(EventExecutionsTable)
-                .expr(Func::coalesce([
-                    // Get total length of all metadata text
-                    Func::sum(Func::char_length(Expr::col(
-                        EventExecutionsColumn::Metadata,
-                    )))
-                    .into(),
-                    // Fallback to zero
-                    Expr::value(0),
-                ])),
+        let result: (u32,) = sqlx::query_as(
+            r#"SELECT COALESCE(SUM(LENGTH("metadata")), 0) FROM "event_executions""#,
         )
-        .await
+        .fetch_one(db)
+        .await?;
+        Ok(result.0)
     }
 }
