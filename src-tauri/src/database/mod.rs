@@ -11,7 +11,6 @@ use std::{path::PathBuf, str::FromStr};
 use tokio::fs::{create_dir_all, File};
 
 pub mod entity;
-pub mod helpers;
 mod migrations;
 
 pub type DbPool = SqlitePool;
