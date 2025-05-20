@@ -116,7 +116,7 @@ impl CommandLogsModel {
         }
 
         let placeholders = std::iter::repeat('?').take(ids.len()).join(",");
-        let sql = format!(r#"DELETE FROM "command_logs" WHERE "id" IS IN ({placeholders})"#);
+        let sql = format!(r#"DELETE FROM "command_logs" WHERE "id" IN ({placeholders})"#);
         let mut query = sqlx::query(&sql);
 
         for id in ids {

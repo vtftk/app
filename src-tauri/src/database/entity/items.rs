@@ -138,7 +138,7 @@ impl ItemModel {
 
         let placeholders = std::iter::repeat('?').take(item_ids.len()).join(",");
         let sql = format!(
-            r#"SELECT "item_id", "sound_id", "sound_type" FROM "items_sounds" WHERE "item_id" IS IN ({placeholders})"#
+            r#"SELECT "item_id", "sound_id", "sound_type" FROM "items_sounds" WHERE "item_id" IN ({placeholders})"#
         );
         let mut query = sqlx::query_as(&sql);
 
@@ -209,7 +209,7 @@ impl ItemModel {
         }
 
         let placeholders = std::iter::repeat('?').take(ids.len()).join(",");
-        let sql = format!(r#"SELECT * FROM "items" WHERE "id" IS IN ({placeholders})"#);
+        let sql = format!(r#"SELECT * FROM "items" WHERE "id" IN ({placeholders})"#);
         let mut query = sqlx::query_as(&sql);
 
         for id in ids {
@@ -239,7 +239,7 @@ impl ItemModel {
 
         // Create the value placeholders for the names
         let placeholders = std::iter::repeat('?').take(names.len()).join(",");
-        let sql = format!(r#"SELECT * FROM "items" WHERE {name_column} IS IN ({placeholders})"#);
+        let sql = format!(r#"SELECT * FROM "items" WHERE {name_column} IN ({placeholders})"#);
 
         let mut query = sqlx::query_as(&sql);
 

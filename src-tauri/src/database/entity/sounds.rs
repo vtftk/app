@@ -112,7 +112,7 @@ impl SoundModel {
         }
 
         let placeholders = std::iter::repeat('?').take(ids.len()).join(",");
-        let sql = format!(r#"SELECT * FROM "sounds" WHERE "id" IS IN ({placeholders})"#);
+        let sql = format!(r#"SELECT * FROM "sounds" WHERE "id" IN ({placeholders})"#);
         let mut query = sqlx::query_as(&sql);
 
         for id in ids {
@@ -130,9 +130,8 @@ impl SoundModel {
         }
 
         let placeholders = std::iter::repeat('?').take(ids.len()).join(",");
-        let sql = format!(
-            r#"SELECT "id", "src", "volume" FROM "sounds" WHERE "id" IS IN ({placeholders})"#
-        );
+        let sql =
+            format!(r#"SELECT "id", "src", "volume" FROM "sounds" WHERE "id" IN ({placeholders})"#);
         let mut query = sqlx::query_as(&sql);
 
         for id in ids {
@@ -169,7 +168,7 @@ impl SoundModel {
 
         // Create the value placeholders for the names
         let placeholders = std::iter::repeat('?').take(names.len()).join(",");
-        let sql = format!(r#"SELECT * FROM "sounds" WHERE {name_column} IS IN ({placeholders})"#);
+        let sql = format!(r#"SELECT * FROM "sounds" WHERE {name_column} IN ({placeholders})"#);
 
         let mut query = sqlx::query_as(&sql);
 

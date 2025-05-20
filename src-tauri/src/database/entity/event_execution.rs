@@ -139,7 +139,7 @@ impl EventExecutionModel {
         }
 
         let placeholders = std::iter::repeat('?').take(ids.len()).join(",");
-        let sql = format!(r#"DELETE FROM "event_executions" WHERE "id" IS IN ({placeholders})"#);
+        let sql = format!(r#"DELETE FROM "event_executions" WHERE "id" IN ({placeholders})"#);
         let mut query = sqlx::query(&sql);
 
         for id in ids {
