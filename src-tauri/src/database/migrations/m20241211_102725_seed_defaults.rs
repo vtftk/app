@@ -108,18 +108,21 @@ impl Migration for SeedDefaultsMigration {
 
         // Create item sound associations
         for item_id in item_ids {
-            let (sql, values) =
-                Query::insert()
-                    .into_table(ItemsSoundsTable)
-                    .columns([
-                        ItemsSoundsColumn::ItemId,
-                        ItemsSoundsColumn::SoundId,
-                        ItemsSoundsColumn::SoundType,
-                    ])
-                    .values_from_panic(sound_ids.iter().copied().map(|sound_id| {
-                        [item_id.into(), sound_id.into(), SoundType::Impact.into()]
-                    }))
-                    .build_sqlx(SqliteQueryBuilder);
+            let (sql, values) = Query::insert()
+                .into_table(ItemsSoundsTable)
+                .columns([
+                    ItemsSoundsColumn::ItemId,
+                    ItemsSoundsColumn::SoundId,
+                    ItemsSoundsColumn::SoundType,
+                ])
+                .values_from_panic(sound_ids.iter().copied().map(|sound_id| {
+                    [
+                        item_id.into(),
+                        sound_id.into(),
+                        SoundType::Impact.to_string().into(),
+                    ]
+                }))
+                .build_sqlx(SqliteQueryBuilder);
 
             sqlx::query_with(&sql, values)
                 .execute(db.deref_mut())

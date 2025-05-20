@@ -1,31 +1,13 @@
 use chrono::{DateTime, Utc};
-use sea_query::{CaseStatement, Expr, IdenStatic, Order, Query, Value};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use strum::{Display, EnumString};
 use uuid::Uuid;
 
-use crate::database::{
-    helpers::{sql_exec, sql_query_all, sql_query_maybe_one},
-    DbPool, DbResult,
-};
+use crate::database::{DbErr, DbPool, DbResult};
 
 use super::shared::{MinMax, MinimumRequireRole, UpdateOrdering};
-
-#[derive(IdenStatic, Copy, Clone)]
-#[iden(rename = "events")]
-pub struct EventsTable;
-
-#[derive(IdenStatic, Copy, Clone)]
-pub enum EventsColumn {
-    Id,
-    Enabled,
-    Name,
-    TriggerType,
-    Config,
-    Order,
-    CreatedAt,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct EventModel {
@@ -90,13 +72,6 @@ pub enum EventTriggerType {
     Timer,
     AdBreakBegin,
     ShoutoutReceive,
-}
-
-impl From<EventTriggerType> for Value {
-    fn from(x: EventTriggerType) -> Value {
-        let string: String = x.to_string();
-        Value::String(Some(Box::new(string)))
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -283,23 +258,11 @@ pub struct UpdateEvent {
     pub enabled: Option<bool>,
     pub name: Option<String>,
     pub config: Option<EventConfig>,
-    pub order: Option<u32>,
 }
 
 impl EventModel {
-    fn columns() -> [EventsColumn; 6] {
-        [
-            EventsColumn::Id,
-            EventsColumn::Enabled,
-            EventsColumn::Name,
-            EventsColumn::Config,
-            EventsColumn::Order,
-            EventsColumn::CreatedAt,
-        ]
-    }
-
     /// Create a new event
-    pub async fn create(db: &DbPool, create: CreateEvent) -> anyhow::Result<EventModel> {
+    pub async fn create(db: &DbPool, create: CreateEvent) -> DbResult<EventModel> {
         let id = Uuid::new_v4();
         let model = EventModel {
             id,
@@ -310,29 +273,20 @@ impl EventModel {
             created_at: Utc::now(),
         };
 
-        let config_value = serde_json::to_value(&model.config)?;
+        let config_value =
+            serde_json::to_value(&model.config).map_err(|err| DbErr::Encode(err.into()))?;
 
-        sql_exec(
-            db,
-            Query::insert()
-                .into_table(EventsTable)
-                .columns([
-                    EventsColumn::Id,
-                    EventsColumn::Enabled,
-                    EventsColumn::Name,
-                    EventsColumn::Config,
-                    EventsColumn::Order,
-                    EventsColumn::CreatedAt,
-                ])
-                .values_panic([
-                    model.id.into(),
-                    model.enabled.into(),
-                    model.name.clone().into(),
-                    config_value.into(),
-                    model.order.into(),
-                    model.created_at.into(),
-                ]),
+        sqlx::query(
+            r#"INSERT INTO "events" ("id", "enabled", "name", "config", "order", "created_at")
+            VALUES (?, ?, ?, ?, ?, ?)"#,
         )
+        .bind(model.id)
+        .bind(model.enabled)
+        .bind(model.name.as_str())
+        .bind(config_value)
+        .bind(model.order)
+        .bind(model.created_at)
+        .execute(db)
         .await?;
 
         Ok(model)
@@ -340,14 +294,10 @@ impl EventModel {
 
     /// Find a specific event by ID
     pub async fn get_by_id(db: &DbPool, id: Uuid) -> DbResult<Option<EventModel>> {
-        sql_query_maybe_one(
-            db,
-            Query::select()
-                .columns(EventModel::columns())
-                .from(EventsTable)
-                .and_where(Expr::col(EventsColumn::Id).eq(id)),
-        )
-        .await
+        sqlx::query_as(r#"SELECT * FROM "events" WHERE "id" = ?"#)
+            .bind(id)
+            .fetch_optional(db)
+            .await
     }
 
     /// Find a specific event by a specific trigger type
@@ -357,103 +307,82 @@ impl EventModel {
         db: &DbPool,
         trigger_type: EventTriggerType,
     ) -> DbResult<Vec<EventModel>> {
-        sql_query_all(
-            db,
-            Query::select()
-                .columns(EventModel::columns())
-                .from(EventsTable)
-                .and_where(Expr::col(EventsColumn::TriggerType).eq(trigger_type))
-                .and_where(Expr::col(EventsColumn::Enabled).eq(true))
-                .order_by_columns([
-                    (EventsColumn::Order, Order::Asc),
-                    (EventsColumn::CreatedAt, Order::Desc),
-                ]),
+        sqlx::query_as(
+            r#"SELECT * FROM "events" 
+                    WHERE "trigger_type" = ? AND "enabled" = TRUE
+                    ORDER BY "order" ASC, "created_at" DESC"#,
         )
+        .bind(trigger_type)
+        .fetch_all(db)
         .await
     }
 
     /// Find all events
     pub async fn all(db: &DbPool) -> DbResult<Vec<EventModel>> {
-        sql_query_all(
-            db,
-            Query::select()
-                .columns(EventModel::columns())
-                .from(EventsTable)
-                .order_by_columns([
-                    (EventsColumn::Order, Order::Asc),
-                    (EventsColumn::CreatedAt, Order::Desc),
-                ]),
-        )
-        .await
+        sqlx::query_as(r#"SELECT * FROM "events" ORDER BY "order" ASC, "created_at" DESC"#)
+            .fetch_all(db)
+            .await
     }
 
     /// Update the current event
     pub async fn update(&mut self, db: &DbPool, data: UpdateEvent) -> anyhow::Result<()> {
-        let mut update = Query::update();
-        update
-            .table(EventsTable)
-            .and_where(Expr::col(EventsColumn::Id).eq(self.id));
+        let enabled = data.enabled.unwrap_or(self.enabled);
+        let name = data.name.unwrap_or_else(|| self.name.clone());
+        let config = data.config.unwrap_or_else(|| self.config.clone());
+        let config_value =
+            serde_json::to_value(&config).map_err(|err| DbErr::Encode(err.into()))?;
 
-        if let Some(enabled) = data.enabled {
-            self.enabled = enabled;
-            update.value(EventsColumn::Enabled, Expr::value(enabled));
-        }
+        sqlx::query(
+            r#"UPDATE "events" SET "enabled" = ?, "name" = ?, "config" = ? WHERE "id" = ?"#,
+        )
+        .bind(enabled)
+        .bind(name.as_str())
+        .bind(config_value)
+        .bind(self.id)
+        .execute(db)
+        .await?;
 
-        if let Some(name) = data.name {
-            self.name = name.clone();
-            update.value(EventsColumn::Name, Expr::value(name));
-        }
-
-        if let Some(config) = data.config {
-            self.config = config;
-
-            let config_value = serde_json::to_value(&self.config)?;
-            update.value(EventsColumn::Config, Expr::value(config_value));
-        }
-
-        if let Some(order) = data.order {
-            self.order = order;
-            update.value(EventsColumn::Order, Expr::value(order));
-        }
-
-        sql_exec(db, &update).await?;
+        self.enabled = enabled;
+        self.name = name;
+        self.config = config;
 
         Ok(())
     }
 
     pub async fn update_order(db: &DbPool, data: Vec<UpdateOrdering>) -> DbResult<()> {
         for order_chunk in data.chunks(1000) {
-            let mut case = CaseStatement::new()
-                // Use the current column value when not specified
-                .finally(Expr::col(EventsColumn::Order));
+            let cases = std::iter::repeat("WHEN ? = ?")
+                .take(order_chunk.len())
+                .join(",");
 
-            // Add case for all updated values
+            let sql = format!(
+                r#"
+                UPDATE "events"
+                SET "order" = CASE "id"
+                    {cases}
+                    ELSE "order"
+                END
+            "#
+            );
+
+            let mut query = sqlx::query(&sql);
+
             for order in order_chunk {
-                case = case.case(
-                    Expr::col(EventsColumn::Id).eq(order.id),
-                    Expr::value(order.order),
-                );
+                query = query.bind(order.id).bind(order.order);
             }
 
-            sql_exec(
-                db,
-                Query::update()
-                    .table(EventsTable)
-                    .value(EventsColumn::Order, case),
-            )
-            .await?;
+            query.execute(db).await?;
         }
 
         Ok(())
     }
 
     pub async fn delete(self, db: &DbPool) -> DbResult<()> {
-        sql_exec(
-            db,
-            Query::delete()
-                .from_table(EventsTable)
-                .and_where(Expr::col(EventsColumn::Id).eq(self.id)),
-        )
-        .await
+        sqlx::query(r#"DELETE FROM "events" WHERE "id" = ?"#)
+            .bind(self.id)
+            .execute(db)
+            .await?;
+
+        Ok(())
     }
 }

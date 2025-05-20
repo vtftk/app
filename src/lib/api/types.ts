@@ -136,7 +136,6 @@ export type UpdateEvent = {
     name: string;
     enabled: boolean;
     config: EventConfig;
-    order: number;
   }>;
 };
 
