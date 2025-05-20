@@ -1,21 +1,13 @@
-use std::ops::DerefMut;
-
-use chrono::Utc;
-use sea_query::{Query, SqliteQueryBuilder};
-use sea_query_binder::SqlxBinder;
-use uuid::Uuid;
-
 use crate::database::entity::{
     items::{ItemConfig, ItemImageConfig},
     sounds::SoundType,
 };
+use chrono::Utc;
+use itertools::Itertools;
+use std::ops::DerefMut;
+use uuid::Uuid;
 
-use super::{
-    m20241208_060123_create_items_table::{ItemsColumn, ItemsTable},
-    m20241208_060144_create_sounds_table::{SoundsColumn, SoundsTable},
-    m20241208_063859_create_items_sounds_junction_table::{ItemsSoundsColumn, ItemsSoundsTable},
-    Migration,
-};
+use super::Migration;
 
 pub struct SeedDefaultsMigration;
 
@@ -37,29 +29,18 @@ impl Migration for SeedDefaultsMigration {
             let order = sound_ids.len() as u32;
             let created_at = Utc::now();
 
-            let (sql, values) = Query::insert()
-                .into_table(SoundsTable)
-                .columns([
-                    SoundsColumn::Id,
-                    SoundsColumn::Name,
-                    SoundsColumn::Src,
-                    SoundsColumn::Volume,
-                    SoundsColumn::Order,
-                    SoundsColumn::CreatedAt,
-                ])
-                .values_panic([
-                    id.into(),
-                    name.to_string().into(),
-                    src.into(),
-                    volume.into(),
-                    order.into(),
-                    created_at.into(),
-                ])
-                .build_sqlx(SqliteQueryBuilder);
-
-            sqlx::query_with(&sql, values)
-                .execute(db.deref_mut())
-                .await?;
+            sqlx::query(
+                r#"INSERT INTO "sounds" ("id", "name", "src", "volume", "order", "created_at")
+                VALUES (?, ?, ?, ?, ?, ?)"#,
+            )
+            .bind(id)
+            .bind(name)
+            .bind(src)
+            .bind(volume)
+            .bind(order)
+            .bind(created_at)
+            .execute(db.deref_mut())
+            .await?;
 
             sound_ids.push(id);
         }
@@ -81,52 +62,37 @@ impl Migration for SeedDefaultsMigration {
             let created_at = Utc::now();
             let config = serde_json::to_value(config)?;
 
-            let (sql, values) = Query::insert()
-                .into_table(ItemsTable)
-                .columns([
-                    ItemsColumn::Id,
-                    ItemsColumn::Name,
-                    ItemsColumn::Config,
-                    ItemsColumn::Order,
-                    ItemsColumn::CreatedAt,
-                ])
-                .values_panic([
-                    id.into(),
-                    name.to_string().into(),
-                    config.into(),
-                    order.into(),
-                    created_at.into(),
-                ])
-                .build_sqlx(SqliteQueryBuilder);
-
-            sqlx::query_with(&sql, values)
-                .execute(db.deref_mut())
-                .await?;
+            sqlx::query(
+                r#"INSERT INTO "items" ("id", "name", "config", "order", "created_at")
+                VALUES (?, ?, ?, ?, ?)"#,
+            )
+            .bind(id)
+            .bind(name)
+            .bind(config)
+            .bind(order)
+            .bind(created_at)
+            .execute(db.deref_mut())
+            .await?;
 
             item_ids.push(id);
         }
 
         // Create item sound associations
         for item_id in item_ids {
-            let (sql, values) = Query::insert()
-                .into_table(ItemsSoundsTable)
-                .columns([
-                    ItemsSoundsColumn::ItemId,
-                    ItemsSoundsColumn::SoundId,
-                    ItemsSoundsColumn::SoundType,
-                ])
-                .values_from_panic(sound_ids.iter().copied().map(|sound_id| {
-                    [
-                        item_id.into(),
-                        sound_id.into(),
-                        SoundType::Impact.to_string().into(),
-                    ]
-                }))
-                .build_sqlx(SqliteQueryBuilder);
+            let values_sets = std::iter::repeat("(?,?,?)").take(sound_ids.len()).join(",");
+            let sql = format!(
+                r#"INSERT INTO "items_sounds" ("item_id", "sound_id", "sound_type")
+            VALUES {values_sets}
+            "#
+            );
 
-            sqlx::query_with(&sql, values)
-                .execute(db.deref_mut())
-                .await?;
+            let mut query = sqlx::query(&sql);
+
+            for sound_id in &sound_ids {
+                query = query.bind(item_id).bind(sound_id).bind(SoundType::Impact);
+            }
+
+            query.execute(db.deref_mut()).await?;
         }
 
         db.commit().await?;

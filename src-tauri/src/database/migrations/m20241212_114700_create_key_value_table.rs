@@ -1,5 +1,4 @@
 use super::Migration;
-use sea_query::{ColumnDef, IdenStatic, SqliteQueryBuilder, Table};
 
 pub struct KeyValueMigration;
 
@@ -10,34 +9,12 @@ impl Migration for KeyValueMigration {
     }
 
     async fn up(&self, db: &crate::database::DbPool) -> anyhow::Result<()> {
-        sqlx::query(
-            &Table::create()
-                .table(KeyValueTable)
-                .if_not_exists()
-                .col(
-                    ColumnDef::new(KeyValueColumn::Key)
-                        .string()
-                        .not_null()
-                        .primary_key(),
-                )
-                .col(ColumnDef::new(KeyValueColumn::Value).string().not_null())
-                .col(ColumnDef::new(KeyValueColumn::Type).string().not_null())
-                .build(SqliteQueryBuilder),
-        )
+        sqlx::raw_sql(include_str!(
+            "./sql/m20241212_114700_create_key_value_table.sql"
+        ))
         .execute(db)
         .await?;
 
         Ok(())
     }
-}
-
-#[derive(IdenStatic, Copy, Clone)]
-#[iden(rename = "key_value")]
-pub struct KeyValueTable;
-
-#[derive(IdenStatic, Copy, Clone)]
-pub enum KeyValueColumn {
-    Key,
-    Value,
-    Type,
 }

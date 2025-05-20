@@ -1,11 +1,8 @@
+use super::{DbPool, DbResult};
 use anyhow::Context;
 use chrono::{DateTime, Utc};
 use log::warn;
-use sea_query::{ColumnDef, IdenStatic, Query, SqliteQueryBuilder, Table};
-use sea_query_binder::SqlxBinder;
 use sqlx::prelude::FromRow;
-
-use super::{DbPool, DbResult};
 
 mod m20241208_060123_create_items_table;
 mod m20241208_060138_create_events_table;
@@ -59,20 +56,6 @@ struct AppliedMigration {
     applied_at: DateTime<Utc>,
 }
 
-/// Table for storing migrations
-#[derive(IdenStatic, Copy, Clone)]
-#[iden(rename = "migrations")]
-pub struct MigrationsTable;
-
-/// Columns on the migrations table
-#[derive(IdenStatic, Copy, Clone)]
-pub enum MigrationsColumn {
-    /// Name of the migration
-    Name,
-    /// When the migration was applied
-    AppliedAt,
-}
-
 pub async fn migrate(db: &DbPool) -> anyhow::Result<()> {
     create_migrations_table(db)
         .await
@@ -121,23 +104,14 @@ pub async fn migrate(db: &DbPool) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn create_migrations_table(db: &DbPool) -> anyhow::Result<()> {
+async fn create_migrations_table(db: &DbPool) -> DbResult<()> {
     sqlx::query(
-        &Table::create()
-            .table(MigrationsTable)
-            .if_not_exists()
-            .col(
-                ColumnDef::new(MigrationsColumn::Name)
-                    .uuid()
-                    .not_null()
-                    .primary_key(),
-            )
-            .col(
-                ColumnDef::new(MigrationsColumn::AppliedAt)
-                    .date_time()
-                    .not_null(),
-            )
-            .build(SqliteQueryBuilder),
+        r#"
+        CREATE TABLE IF NOT EXISTS "migrations" (
+            "name"	VARCHAR NOT NULL PRIMARY KEY,
+            "applied_at"	datetime_text NOT NULL,
+        );
+    "#,
     )
     .execute(db)
     .await?;
@@ -146,11 +120,9 @@ async fn create_migrations_table(db: &DbPool) -> anyhow::Result<()> {
 }
 
 async fn get_applied_migrations(db: &DbPool) -> DbResult<Vec<AppliedMigration>> {
-    let (query, _values) = Query::select()
-        .columns([MigrationsColumn::Name, MigrationsColumn::AppliedAt])
-        .from(MigrationsTable)
-        .build(SqliteQueryBuilder);
-    let result: Vec<AppliedMigration> = sqlx::query_as(&query).fetch_all(db).await?;
+    let result: Vec<AppliedMigration> = sqlx::query_as(r#"SELECT * FROM "migrations""#)
+        .fetch_all(db)
+        .await?;
     Ok(result)
 }
 
@@ -159,15 +131,12 @@ async fn create_applied_migration(
     name: String,
     applied_at: DateTime<Utc>,
 ) -> DbResult<AppliedMigration> {
-    let (query, values) = Query::insert()
-        .columns([MigrationsColumn::Name, MigrationsColumn::AppliedAt])
-        .into_table(MigrationsTable)
-        .values_panic([name.as_str().into(), applied_at.into()])
-        .build_sqlx(SqliteQueryBuilder);
-
-    sqlx::query_with(&query, values).execute(db).await?;
+    sqlx::query(r#"INSERT INTO "migrations" ("name", "applied_at") VALUES (?, ?)"#)
+        .bind(name.as_str())
+        .bind(applied_at)
+        .execute(db)
+        .await?;
 
     let model = AppliedMigration { name, applied_at };
-
     Ok(model)
 }
