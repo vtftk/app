@@ -4,50 +4,24 @@ use chrono::{DateTime, Utc};
 use log::warn;
 use sqlx::prelude::FromRow;
 
-mod m20241208_060123_create_items_table;
-mod m20241208_060138_create_events_table;
-mod m20241208_060144_create_sounds_table;
-mod m20241208_060200_create_commands_table;
-mod m20241208_060230_create_model_data_table;
-mod m20241208_063859_create_items_sounds_junction_table;
-mod m20241210_082256_create_event_executions_table;
-mod m20241210_082316_create_command_executions_table;
-mod m20241211_102725_seed_defaults;
-mod m20241212_114700_create_key_value_table;
-mod m20241214_080902_create_command_logs_table;
-mod m20241227_110419_create_event_logs_table;
-mod m20250104_071851_create_app_data_table;
-mod m20250124_082703_create_chat_history_table;
-mod m20250209_101257_create_command_aliases_table;
-mod m20250216_140137_create_secrets_table;
-
-fn migrations() -> Vec<Box<dyn Migration>> {
-    vec![
-        Box::new(m20241208_060123_create_items_table::ItemsMigration),
-        Box::new(m20241208_060138_create_events_table::EventsMigration),
-        Box::new(m20241208_060144_create_sounds_table::SoundsMigration),
-        Box::new(m20241208_060200_create_commands_table::CommandsMigration),
-        Box::new(m20241208_060230_create_model_data_table::ModelDataMigration),
-        Box::new(m20241208_063859_create_items_sounds_junction_table::ItemsSoundsMigration),
-        Box::new(m20241210_082256_create_event_executions_table::EventExecutionsMigration),
-        Box::new(m20241210_082316_create_command_executions_table::CommandExecutionsMigration),
-        Box::new(m20241211_102725_seed_defaults::SeedDefaultsMigration),
-        Box::new(m20241212_114700_create_key_value_table::KeyValueMigration),
-        Box::new(m20241214_080902_create_command_logs_table::CommandLogsMigration),
-        Box::new(m20241227_110419_create_event_logs_table::EventLogsMigration),
-        Box::new(m20250104_071851_create_app_data_table::AppDataMigration),
-        Box::new(m20250124_082703_create_chat_history_table::ChatHistoryMigration),
-        Box::new(m20250209_101257_create_command_aliases_table::CommandAliasesMigration),
-        Box::new(m20250216_140137_create_secrets_table::SecretsMigration),
-    ]
-}
-
-#[async_trait::async_trait]
-pub trait Migration {
-    fn name(&self) -> &str;
-
-    async fn up(&self, db: &DbPool) -> anyhow::Result<()>;
-}
+#[rustfmt::skip]
+const MIGRATIONS: &[(&str, &str)]= &[
+    ("m20241208_060123_create_items_table", include_str!("sql/m20241208_060123_create_items_table.sql")),
+    ("m20241208_060138_create_events_table", include_str!("sql/m20241208_060138_create_events_table.sql")),
+    ("m20241208_060144_create_sounds_table", include_str!("sql/m20241208_060144_create_sounds_table.sql")),
+    ("m20241208_060200_create_commands_table", include_str!("sql/m20241208_060200_create_commands_table.sql")),
+    ("m20241208_060230_create_model_data_table", include_str!("sql/m20241208_060230_create_model_data_table.sql")),
+    ("m20241210_082256_create_event_executions_table", include_str!("sql/m20241210_082256_create_event_executions_table.sql")),
+    ("m20241210_082316_create_command_executions_table", include_str!("sql/m20241210_082316_create_command_executions_table.sql")),
+    ("m20241211_102725_seed_defaults", include_str!("sql/m20241211_102725_seed_defaults.sql")),
+    ("m20241212_114700_create_key_value_table", include_str!("sql/m20241212_114700_create_key_value_table.sql")),
+    ("m20241214_080902_create_command_logs_table", include_str!("sql/m20241214_080902_create_command_logs_table.sql")),
+    ("m20241227_110419_create_event_logs_table", include_str!("sql/m20241227_110419_create_event_logs_table.sql")),
+    ("m20250104_071851_create_app_data_table", include_str!("sql/m20250104_071851_create_app_data_table.sql")),
+    ("m20250124_082703_create_chat_history_table", include_str!("sql/m20250124_082703_create_chat_history_table.sql")),
+    ("m20250209_101257_create_command_aliases_table", include_str!("sql/m20250209_101257_create_command_aliases_table.sql")),
+    ("m20250216_140137_create_secrets_table", include_str!("sql/m20250216_140137_create_secrets_table.sql")),
+];
 
 #[derive(FromRow)]
 struct AppliedMigration {
@@ -61,14 +35,12 @@ pub async fn migrate(db: &DbPool) -> anyhow::Result<()> {
         .await
         .context("failed to create migrations table")?;
 
-    let migrations = migrations();
     let mut applied = get_applied_migrations(db)
         .await
         .context("failed to get applied migrations")?;
     let mut migration_names = Vec::new();
 
-    for migration in &migrations {
-        let name = migration.name();
+    for (name, sql) in MIGRATIONS {
         migration_names.push(name.to_string());
 
         // Migration already applied
@@ -77,8 +49,8 @@ pub async fn migrate(db: &DbPool) -> anyhow::Result<()> {
         }
 
         // Apply migration
-        migration
-            .up(db)
+        sqlx::raw_sql(sql)
+            .execute(db)
             .await
             .with_context(|| format!("failed to apply migration \"{name}\""))?;
 
