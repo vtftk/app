@@ -126,7 +126,7 @@ async fn process_event(
         }
         AppEvent::TwitchClientReset => {
             debug!("resetting twitch manager");
-            twitch.reset().await;
+            twitch.reset();
             return Ok(());
         }
 
@@ -516,7 +516,6 @@ pub async fn has_required_role(
     // User is the broadcaster
     if twitch
         .get_user_token()
-        .await
         .is_some_and(|value| value.user_id == user)
     {
         return true;

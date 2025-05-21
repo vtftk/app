@@ -9,11 +9,9 @@ use crate::{
 use anyhow::{anyhow, Context};
 use futures::TryStreamExt;
 use log::{debug, error, info};
+use parking_lot::RwLock;
 use std::sync::Arc;
-use tokio::{
-    join,
-    sync::{RwLock, RwLockReadGuard, RwLockWriteGuard},
-};
+use tokio::join;
 use twitch_api::{
     helix::{
         channels::{Follower, GetChannelFollowersRequest, Vip},
@@ -70,6 +68,39 @@ pub const TWITCH_REQUIRED_SCOPES: &[Scope] = &[
 #[derive(Clone)]
 pub struct Twitch {
     _inner: Arc<TwitchInner>,
+}
+
+struct TwitchInner {
+    helix_client: HelixClient<'static, reqwest::Client>,
+    state: RwLock<TwitchManagerState>,
+    tx: AppEventSender,
+}
+
+pub struct TwitchManagerStateAuthenticated {
+    /// Token for the authenticated user
+    token: UserToken,
+
+    /// Currently active websocket connection
+    _websocket: WebsocketManagedTask,
+
+    /// List of available rewards
+    rewards: Option<Arc<[CustomReward]>>,
+
+    /// Current loaded list of moderators
+    moderators: Option<Arc<[Moderator]>>,
+
+    /// Current loaded list of vips
+    vips: Option<Arc<[Vip]>>,
+}
+
+#[derive(Default)]
+#[allow(clippy::large_enum_variant)]
+enum TwitchManagerState {
+    // Twitch is not yet authenticated
+    #[default]
+    Initial,
+    // Twitch is authenticated
+    Authenticated(TwitchManagerStateAuthenticated),
 }
 
 impl Twitch {
@@ -141,8 +172,8 @@ impl Twitch {
         Ok(())
     }
 
-    pub async fn is_authenticated(&self) -> bool {
-        let lock = &*self.state().await;
+    pub fn is_authenticated(&self) -> bool {
+        let lock = &*self._inner.state.read();
         matches!(lock, TwitchManagerState::Authenticated { .. })
     }
 
@@ -151,7 +182,7 @@ impl Twitch {
         message: &str,
     ) -> anyhow::Result<SendChatMessageResponse> {
         // Obtain twitch access token
-        let token = self.get_user_token().await.context("not authenticated")?;
+        let token = self.get_user_token().context("not authenticated")?;
 
         // Get broadcaster user ID
         let user_id = token.user_id.clone();
@@ -192,7 +223,7 @@ impl Twitch {
 
     pub async fn get_channel_emotes(&self, user_id: UserId) -> anyhow::Result<Vec<ChannelEmote>> {
         // Obtain twitch access token
-        let token = self.get_user_token().await.context("not authenticated")?;
+        let token = self.get_user_token().context("not authenticated")?;
 
         let emotes = self
             .helix_client()
@@ -204,7 +235,7 @@ impl Twitch {
 
     pub async fn get_follower_by_id(&self, user_id: &UserId) -> anyhow::Result<Option<Follower>> {
         // Obtain twitch access token
-        let token = self.get_user_token().await.context("not authenticated")?;
+        let token = self.get_user_token().context("not authenticated")?;
 
         // Get broadcaster user ID
         let broadcaster_id = token.user_id.clone();
@@ -218,8 +249,8 @@ impl Twitch {
         Ok(response.pop())
     }
 
-    pub async fn get_user_token(&self) -> Option<UserToken> {
-        let lock = &*self.state().await;
+    pub fn get_user_token(&self) -> Option<UserToken> {
+        let lock = &*self._inner.state.read();
         match lock {
             TwitchManagerState::Initial => None,
             TwitchManagerState::Authenticated(state) => Some(state.token.clone()),
@@ -227,12 +258,12 @@ impl Twitch {
     }
 
     pub async fn get_user_id(&self) -> Option<UserId> {
-        self.get_user_token().await.map(|token| token.user_id)
+        self.get_user_token().map(|token| token.user_id)
     }
 
     pub async fn set_authenticated(&self, token: UserToken) {
         {
-            let lock = &mut *self.state_mut().await;
+            let lock = &mut *self._inner.state.write();
 
             let websocket = WebsocketManagedTask::create(
                 self.helix_client().clone(),
@@ -272,9 +303,9 @@ impl Twitch {
         }
     }
 
-    pub async fn reset(&self) {
+    pub fn reset(&self) {
         {
-            let lock = &mut *self.state_mut().await;
+            let lock = &mut *self._inner.state.write();
             *lock = TwitchManagerState::Initial;
         }
 
@@ -285,7 +316,7 @@ impl Twitch {
     pub async fn get_moderator_list(&self) -> anyhow::Result<Arc<[Moderator]>> {
         // First attempt to read existing list
         {
-            let state = &*self.state().await;
+            let state = &*self._inner.state.read();
             match state {
                 TwitchManagerState::Initial => return Err(anyhow!("not authenticated")),
                 TwitchManagerState::Authenticated(state) => {
@@ -300,7 +331,7 @@ impl Twitch {
         let moderators: Arc<[Moderator]> = moderators.into();
 
         // Write new list
-        let state = &mut *self.state_mut().await;
+        let state = &mut *self._inner.state.write();
         match state {
             TwitchManagerState::Initial => Err(anyhow!("not authenticated")),
             TwitchManagerState::Authenticated(state) => {
@@ -313,7 +344,7 @@ impl Twitch {
     pub async fn get_vip_list(&self) -> anyhow::Result<Arc<[Vip]>> {
         // First attempt to read existing list
         {
-            let state = &*self.state().await;
+            let state = &*self._inner.state.read();
             match state {
                 TwitchManagerState::Initial => return Err(anyhow!("not authenticated")),
                 TwitchManagerState::Authenticated(state) => {
@@ -326,7 +357,7 @@ impl Twitch {
         let vips = self.request_vip_list().await?;
 
         // Write new list
-        let state = &mut *self.state_mut().await;
+        let state = &mut *self._inner.state.write();
         match state {
             TwitchManagerState::Initial => Err(anyhow!("not authenticated")),
             TwitchManagerState::Authenticated(state) => {
@@ -339,7 +370,7 @@ impl Twitch {
     }
 
     pub async fn get_rewards_list(&self) -> anyhow::Result<Arc<[CustomReward]>> {
-        let state = &*self.state().await;
+        let state = &*self._inner.state.read();
         match state {
             TwitchManagerState::Initial => Err(anyhow!("not authenticated")),
             TwitchManagerState::Authenticated(state) => {
@@ -357,7 +388,7 @@ impl Twitch {
         let moderators: Arc<[Moderator]> = moderators.into();
 
         // Write new list
-        let state = &mut *self.state_mut().await;
+        let state = &mut *self._inner.state.write();
         match state {
             TwitchManagerState::Initial => Err(anyhow!("not authenticated")),
             TwitchManagerState::Authenticated(state) => {
@@ -372,7 +403,7 @@ impl Twitch {
         let vips: Arc<[Vip]> = vips.into();
 
         // Write new list
-        let state = &mut *self.state_mut().await;
+        let state = &mut *self._inner.state.write();
         match state {
             TwitchManagerState::Initial => Err(anyhow!("not authenticated")),
             TwitchManagerState::Authenticated(state) => {
@@ -387,7 +418,7 @@ impl Twitch {
         let rewards: Arc<[CustomReward]> = rewards.into();
 
         // Write new list
-        let state = &mut *self.state_mut().await;
+        let state = &mut *self._inner.state.write();
         match state {
             TwitchManagerState::Initial => Err(anyhow!("not authenticated")),
             TwitchManagerState::Authenticated(state) => {
@@ -398,7 +429,7 @@ impl Twitch {
     }
 
     async fn request_moderator_list(&self) -> anyhow::Result<Vec<Moderator>> {
-        let user_token = self.get_user_token().await.context("not authenticated")?;
+        let user_token = self.get_user_token().context("not authenticated")?;
         let user_id = user_token.user_id.clone();
 
         let moderators: Vec<Moderator> = self
@@ -411,7 +442,7 @@ impl Twitch {
     }
 
     async fn request_vip_list(&self) -> anyhow::Result<Vec<Vip>> {
-        let user_token = self.get_user_token().await.context("not authenticated")?;
+        let user_token = self.get_user_token().context("not authenticated")?;
         let user_id = user_token.user_id.clone();
 
         let moderators: Vec<Vip> = self
@@ -424,7 +455,7 @@ impl Twitch {
     }
 
     async fn request_rewards_list(&self) -> anyhow::Result<Vec<CustomReward>> {
-        let user_token = self.get_user_token().await.context("not authenticated")?;
+        let user_token = self.get_user_token().context("not authenticated")?;
         let user_id = user_token.user_id.clone();
         let rewards = self
             .helix_client()
@@ -441,50 +472,7 @@ impl Twitch {
     }
 
     #[inline]
-    async fn state(&self) -> RwLockReadGuard<'_, TwitchManagerState> {
-        self._inner.state.read().await
-    }
-
-    #[inline]
-    async fn state_mut(&self) -> RwLockWriteGuard<'_, TwitchManagerState> {
-        self._inner.state.write().await
-    }
-
-    #[inline]
     fn helix_client(&self) -> &HelixClient<'static, reqwest::Client> {
         &self._inner.helix_client
     }
-}
-
-struct TwitchInner {
-    helix_client: HelixClient<'static, reqwest::Client>,
-    state: RwLock<TwitchManagerState>,
-    tx: AppEventSender,
-}
-
-pub struct TwitchManagerStateAuthenticated {
-    /// Token for the authenticated user
-    token: UserToken,
-
-    /// Currently active websocket connection
-    _websocket: WebsocketManagedTask,
-
-    /// List of available rewards
-    rewards: Option<Arc<[CustomReward]>>,
-
-    /// Current loaded list of moderators
-    moderators: Option<Arc<[Moderator]>>,
-
-    /// Current loaded list of vips
-    vips: Option<Arc<[Vip]>>,
-}
-
-#[derive(Default)]
-#[allow(clippy::large_enum_variant)]
-enum TwitchManagerState {
-    // Twitch is not yet authenticated
-    #[default]
-    Initial,
-    // Twitch is authenticated
-    Authenticated(TwitchManagerStateAuthenticated),
 }

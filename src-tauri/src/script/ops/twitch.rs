@@ -21,7 +21,7 @@ pub async fn op_twitch_get_credentials(
     state: Rc<RefCell<OpState>>,
 ) -> anyhow::Result<Option<TwitchCredentials>> {
     let twitch = state.twitch()?;
-    let token = match twitch.get_user_token().await {
+    let token = match twitch.get_user_token() {
         Some(value) => value,
         None => return Ok(None),
     };

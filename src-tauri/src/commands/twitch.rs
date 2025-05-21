@@ -44,8 +44,8 @@ pub fn get_twitch_oauth_uri(
 }
 
 #[tauri::command]
-pub async fn is_authenticated(twitch: tauri::State<'_, Twitch>) -> CmdResult<bool> {
-    Ok(twitch.is_authenticated().await)
+pub fn is_authenticated(twitch: tauri::State<'_, Twitch>) -> CmdResult<bool> {
+    Ok(twitch.is_authenticated())
 }
 
 #[tauri::command]
@@ -53,7 +53,7 @@ pub async fn logout(
     twitch: tauri::State<'_, Twitch>,
     db: tauri::State<'_, DbPool>,
 ) -> CmdResult<()> {
-    twitch.reset().await;
+    twitch.reset();
     SecretsModel::delete_by_key(db.inner(), TWITCH_SECRET_KEY).await?;
 
     Ok(())
