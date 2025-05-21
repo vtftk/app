@@ -8,8 +8,8 @@ use crate::{
     storage::Storage,
     twitch::manager::Twitch,
 };
-use anyhow::Context;
 use axum::Extension;
+use log::error;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use tauri::AppHandle;
 use tokio::net::TcpListener;
@@ -37,10 +37,7 @@ pub struct HttpExtensions {
     pub storage: Storage,
 }
 
-pub async fn start_http_server(
-    listener: TcpListener,
-    extensions: HttpExtensions,
-) -> anyhow::Result<()> {
+pub async fn start_http_server(listener: TcpListener, extensions: HttpExtensions) {
     // build our application with a single route
     let app = routes::router()
         .layer(Extension(extensions.db))
@@ -52,9 +49,13 @@ pub async fn start_http_server(
         .layer(Extension(extensions.storage))
         .layer(CorsLayer::very_permissive());
 
-    axum::serve(listener, app)
+    if let Err(cause) = axum::serve(listener, app)
+        // Attach graceful shutdown to the shutdown receiver
+        .with_graceful_shutdown(async move {
+            _ = tokio::signal::ctrl_c().await;
+        })
         .await
-        .context("error while serving")?;
-
-    Ok(())
+    {
+        error!("error while serving http server: {cause:?}");
+    }
 }
