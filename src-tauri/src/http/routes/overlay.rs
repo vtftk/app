@@ -68,7 +68,7 @@ pub async fn handle_sse(
     Extension(overlay_msg_rx): Extension<OverlayMessageReceiver>,
     Extension(overlay_data): Extension<OverlayDataStore>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let overlay = overlay_data.create_overlay().await;
+    let overlay = overlay_data.create_overlay();
 
     Sse::new(OverlayEventStream::new(overlay, overlay_msg_rx)).keep_alive(KeepAlive::default())
 }
@@ -81,25 +81,23 @@ pub async fn update_overlay_data(
     Json(req): Json<UpdateRuntimeAppData>,
 ) -> StatusCode {
     // Update the stored runtime data
-    overlay_data
-        .write(|overlay_data| {
-            if let Some(model_id) = req.model_id {
-                overlay_data.model_id = model_id;
-            }
+    overlay_data.write(|overlay_data| {
+        if let Some(model_id) = req.model_id {
+            overlay_data.model_id = model_id;
+        }
 
-            if let Some(vtube_studio_connected) = req.vtube_studio_connected {
-                overlay_data.vtube_studio_connected = vtube_studio_connected;
-            }
+        if let Some(vtube_studio_connected) = req.vtube_studio_connected {
+            overlay_data.vtube_studio_connected = vtube_studio_connected;
+        }
 
-            if let Some(vtube_studio_auth) = req.vtube_studio_auth {
-                overlay_data.vtube_studio_auth = vtube_studio_auth;
-            }
+        if let Some(vtube_studio_auth) = req.vtube_studio_auth {
+            overlay_data.vtube_studio_auth = vtube_studio_auth;
+        }
 
-            if let Some(hotkeys) = req.hotkeys {
-                overlay_data.hotkeys = hotkeys;
-            }
-        })
-        .await;
+        if let Some(hotkeys) = req.hotkeys {
+            overlay_data.hotkeys = hotkeys;
+        }
+    });
 
     StatusCode::OK
 }

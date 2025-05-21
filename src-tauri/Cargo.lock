@@ -6359,6 +6359,7 @@ dependencies = [
  "itertools 0.14.0",
  "log",
  "mime_guess",
+ "parking_lot",
  "reqwest",
  "rfd",
  "sea-query",

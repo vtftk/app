@@ -4,6 +4,7 @@ use crate::{
 };
 use axum::response::sse::Event;
 use futures::Stream;
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::{
     convert::Infallible,
@@ -13,7 +14,6 @@ use std::{
 use std::{fmt::Debug, sync::Arc};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::broadcast;
-use tokio::sync::{RwLock, RwLockReadGuard};
 use tokio_stream::wrappers::BroadcastStream;
 use uuid::Uuid;
 
@@ -183,24 +183,16 @@ pub struct OverlayGuard {
 
 impl Drop for OverlayGuard {
     fn drop(&mut self) {
-        let runtime_app_data = self.inner.clone();
-
         // Decrease the counter of active streams
-        tauri::async_runtime::spawn(async move {
-            let runtime_app_data = runtime_app_data;
+        self.inner.write(|app_data| {
+            app_data.active_overlay_count = app_data.active_overlay_count.saturating_sub(1);
 
-            runtime_app_data
-                .write(|app_data| {
-                    app_data.active_overlay_count = app_data.active_overlay_count.saturating_sub(1);
-
-                    // No longer connected to vtube studio or model
-                    if app_data.active_overlay_count == 0 {
-                        app_data.vtube_studio_connected = false;
-                        app_data.vtube_studio_auth = false;
-                        app_data.model_id = None;
-                    }
-                })
-                .await;
+            // No longer connected to vtube studio or model
+            if app_data.active_overlay_count == 0 {
+                app_data.vtube_studio_connected = false;
+                app_data.vtube_studio_auth = false;
+                app_data.model_id = None;
+            }
         });
     }
 }
@@ -222,29 +214,28 @@ impl OverlayDataStore {
         }
     }
 
-    /// Obtain a read guard
-    pub async fn read(&self) -> RwLockReadGuard<'_, OverlayData> {
-        self.inner.data.read().await
+    /// Get the current overlay data
+    pub fn get(&self) -> OverlayData {
+        self.inner.data.read().clone()
     }
 
     /// Creates a new overlay guard
-    pub async fn create_overlay(&self) -> OverlayGuard {
+    pub fn create_overlay(&self) -> OverlayGuard {
         // Increase number of active overlays
         self.write(|app_data| {
             app_data.active_overlay_count = app_data.active_overlay_count.saturating_add(1);
-        })
-        .await;
+        });
 
         OverlayGuard {
             inner: self.clone(),
         }
     }
 
-    pub async fn write<F>(&self, action: F)
+    pub fn write<F>(&self, action: F)
     where
         F: FnOnce(&mut OverlayData),
     {
-        let data = &mut *self.inner.data.write().await;
+        let data = &mut *self.inner.data.write();
         action(data);
 
         // Let the frontend know the runtime data has changed

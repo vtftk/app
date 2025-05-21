@@ -44,7 +44,7 @@ pub async fn get_app_data(db: tauri::State<'_, DbPool>) -> CmdResult<AppData> {
 pub async fn get_runtime_app_data(
     runtime_app_data: tauri::State<'_, OverlayDataStore>,
 ) -> CmdResult<OverlayData> {
-    Ok(runtime_app_data.read().await.clone())
+    Ok(runtime_app_data.get())
 }
 
 /// Updates the current app data
