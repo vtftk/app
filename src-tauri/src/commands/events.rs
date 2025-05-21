@@ -18,6 +18,7 @@ use crate::{
         outcome::produce_outcome_message,
         scheduler::{SchedulerHandle, SchedulerQueueEvent},
     },
+    export::{self, ExportedEventModel},
     overlay::OverlayMessageSender,
     script::runtime::ScriptExecutorHandle,
     twitch::manager::Twitch,
@@ -204,5 +205,25 @@ pub async fn get_event_logs(
 pub async fn delete_event_logs(log_ids: Vec<Uuid>, db: State<'_, DbPool>) -> CmdResult<()> {
     let db = db.inner();
     EventLogsModel::delete_by_ids(db, &log_ids).await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn export_events(
+    event_ids: Vec<Uuid>,
+    db: State<'_, DbPool>,
+) -> CmdResult<Vec<ExportedEventModel>> {
+    let db = db.inner();
+    let events = export::export_events(db, &event_ids).await?;
+    Ok(events)
+}
+
+#[tauri::command]
+pub async fn import_events(
+    events: Vec<ExportedEventModel>,
+    db: State<'_, DbPool>,
+) -> CmdResult<()> {
+    let db = db.inner();
+    export::import_events(db, events).await?;
     Ok(())
 }

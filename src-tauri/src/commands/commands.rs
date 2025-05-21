@@ -2,15 +2,18 @@
 //!
 //! Commands for interacting with commands from the frontend
 
-use crate::database::{
-    entity::{
-        command_alias::{CommandAliasModel, CommandWithAliases},
-        command_execution::CommandExecutionModel,
-        command_log::CommandLogsModel,
-        commands::{CommandModel, CreateCommand, UpdateCommand},
-        shared::{ExecutionsQuery, LogsQuery, UpdateOrdering},
+use crate::{
+    database::{
+        entity::{
+            command_alias::{CommandAliasModel, CommandWithAliases},
+            command_execution::CommandExecutionModel,
+            command_log::CommandLogsModel,
+            commands::{CommandModel, CreateCommand, UpdateCommand},
+            shared::{ExecutionsQuery, LogsQuery, UpdateOrdering},
+        },
+        DbPool,
     },
-    DbPool,
+    export::{self, ExportedCommandModel},
 };
 use anyhow::Context;
 use tauri::State;
@@ -138,5 +141,25 @@ pub async fn delete_command_executions(
 
     CommandExecutionModel::delete_by_ids(db, &execution_ids).await?;
 
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn export_commands(
+    command_ids: Vec<Uuid>,
+    db: State<'_, DbPool>,
+) -> CmdResult<Vec<ExportedCommandModel>> {
+    let db = db.inner();
+    let events = export::export_commands(db, &command_ids).await?;
+    Ok(events)
+}
+
+#[tauri::command]
+pub async fn import_commands(
+    commands: Vec<ExportedCommandModel>,
+    db: State<'_, DbPool>,
+) -> CmdResult<()> {
+    let db = db.inner();
+    export::import_commands(db, commands).await?;
     Ok(())
 }

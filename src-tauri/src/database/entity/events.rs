@@ -300,6 +300,24 @@ impl EventModel {
             .await
     }
 
+    pub async fn get_by_ids(db: &DbPool, ids: &[Uuid]) -> DbResult<Vec<EventModel>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let placeholders = std::iter::repeat('?').take(ids.len()).join(",");
+        let sql = format!(r#"SELECT * FROM "events" WHERE "id" IN ({placeholders})"#);
+        let mut query = sqlx::query_as(&sql);
+
+        for id in ids {
+            query = query.bind(id);
+        }
+
+        let result = query.fetch_all(db).await?;
+
+        Ok(result)
+    }
+
     /// Find a specific event by a specific trigger type
     ///
     /// Filters to only events marked as enabled

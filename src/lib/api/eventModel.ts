@@ -53,6 +53,14 @@ export function getEventById(eventId: EventId) {
   return invoke<Event | null>("get_event_by_id", { eventId });
 }
 
+export function exportEvents(eventIds: EventId[]) {
+  return invoke<unknown[]>("export_events", { eventIds });
+}
+
+export function importEvents(events: unknown[]) {
+  return invoke("import_events", { events });
+}
+
 export async function createEvent(create: CreateEvent, invalidateList = true) {
   const event = await invoke<Event>("create_event", { create });
 

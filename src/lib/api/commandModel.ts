@@ -48,6 +48,14 @@ export function getCommandById(commandId: CommandId) {
   return invoke<CommandWithAliases | null>("get_command_by_id", { commandId });
 }
 
+export function exportCommands(commandIds: CommandId[]) {
+  return invoke<unknown[]>("export_commands", { commandIds });
+}
+
+export function importCommands(commands: unknown[]) {
+  return invoke("import_commands", { commands });
+}
+
 function invalidateCommandsList() {
   return queryClient.invalidateQueries({ queryKey: COMMANDS_KEY });
 }

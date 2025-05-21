@@ -143,6 +143,24 @@ impl CommandModel {
             .await
     }
 
+    pub async fn get_by_ids(db: &DbPool, ids: &[Uuid]) -> DbResult<Vec<CommandModel>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let placeholders = std::iter::repeat('?').take(ids.len()).join(",");
+        let sql = format!(r#"SELECT * FROM "commands" WHERE "id" IN ({placeholders})"#);
+        let mut query = sqlx::query_as(&sql);
+
+        for id in ids {
+            query = query.bind(id);
+        }
+
+        let result = query.fetch_all(db).await?;
+
+        Ok(result)
+    }
+
     pub async fn all(db: &DbPool) -> DbResult<Vec<Self>> {
         sqlx::query_as(r#"SELECT * FROM "commands" ORDER BY "order" ASC, "created_at" DESC"#)
             .fetch_all(db)
