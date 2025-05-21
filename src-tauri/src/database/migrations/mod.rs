@@ -11,6 +11,7 @@ const MIGRATIONS: &[(&str, &str)]= &[
     ("m20241208_060144_create_sounds_table", include_str!("sql/m20241208_060144_create_sounds_table.sql")),
     ("m20241208_060200_create_commands_table", include_str!("sql/m20241208_060200_create_commands_table.sql")),
     ("m20241208_060230_create_model_data_table", include_str!("sql/m20241208_060230_create_model_data_table.sql")),
+    ("m20241208_063859_create_items_sounds_junction_table", include_str!("sql/m20241208_063859_create_items_sounds_junction_table.sql")),
     ("m20241210_082256_create_event_executions_table", include_str!("sql/m20241210_082256_create_event_executions_table.sql")),
     ("m20241210_082316_create_command_executions_table", include_str!("sql/m20241210_082316_create_command_executions_table.sql")),
     ("m20241211_102725_seed_defaults", include_str!("sql/m20241211_102725_seed_defaults.sql")),

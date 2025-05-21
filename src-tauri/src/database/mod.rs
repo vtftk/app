@@ -6,6 +6,7 @@ use entity::{
     command_execution::CommandExecutionModel, command_log::CommandLogsModel,
     event_execution::EventExecutionModel, event_log::EventLogsModel,
 };
+use log::error;
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use std::{path::PathBuf, str::FromStr};
 use tokio::fs::{create_dir_all, File};
@@ -53,9 +54,10 @@ pub async fn mock_database() -> DbPool {
 }
 
 pub async fn setup_database(db: &DbPool) -> anyhow::Result<()> {
-    migrations::migrate(db)
-        .await
-        .context("failed to migrate database")?;
+    if let Err(cause) = migrations::migrate(db).await {
+        error!("failed to migrate database: {cause:?}");
+        return Err(cause.context("failed to migrate database"));
+    }
     Ok(())
 }
 
