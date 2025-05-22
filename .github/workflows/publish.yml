@@ -49,7 +49,7 @@ jobs:
 
       # Required due to svelte tsconfig
       - name: setup svelte config
-        run: echo "{}" > .svelte-kit/tsconfig.json
+        run: mkdir .svelte-kit && echo "{}" > .svelte-kit/tsconfig.json
 
       - name: install frontend dependencies
         run: npm install
