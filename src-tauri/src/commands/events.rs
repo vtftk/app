@@ -24,7 +24,8 @@ use crate::{
     twitch::manager::Twitch,
 };
 use anyhow::Context;
-use tauri::State;
+use tauri::{async_runtime::spawn_blocking, AppHandle, State};
+use tauri_plugin_dialog::DialogExt;
 use uuid::Uuid;
 
 #[tauri::command]
@@ -211,11 +212,35 @@ pub async fn delete_event_logs(log_ids: Vec<Uuid>, db: State<'_, DbPool>) -> Cmd
 #[tauri::command]
 pub async fn export_events(
     event_ids: Vec<Uuid>,
+    app: AppHandle,
     db: State<'_, DbPool>,
-) -> CmdResult<Vec<ExportedEventModel>> {
+) -> CmdResult<()> {
     let db = db.inner();
     let events = export::export_events(db, &event_ids).await?;
-    Ok(events)
+    let data = serde_json::to_vec_pretty(&events)?;
+
+    let file_path = spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .set_file_name("exported-events.json")
+            .add_filter("JSON", &["json"])
+            .blocking_save_file()
+    })
+    .await?;
+
+    let file_path = match file_path {
+        Some(value) => value,
+        None => return Ok(()),
+    };
+
+    let path = match file_path.as_path() {
+        Some(value) => value,
+        None => return Ok(()),
+    };
+
+    tokio::fs::write(path, &data).await?;
+
+    Ok(())
 }
 
 #[tauri::command]

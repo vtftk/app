@@ -2,6 +2,7 @@
   import type { Command } from "$lib/api/types";
 
   import { toast } from "svelte-sonner";
+  import ExportIcon from "~icons/solar/export-bold";
   import { toastErrorMessage } from "$lib/utils/error";
   import { filterNameSearch } from "$lib/utils/search";
   import DeleteIcon from "~icons/solar/trash-bin-2-bold";
@@ -10,11 +11,13 @@
   import PageLayoutList from "$lib/layouts/PageLayoutList.svelte";
   import LinkButton from "$lib/components/input/LinkButton.svelte";
   import SearchInput from "$lib/components/form/SearchInput.svelte";
+  import ImportCommands from "$lib/components/ImportCommands.svelte";
   import CommandItem from "$lib/sections/commands/CommandItem.svelte";
   import VirtualOrderableGrid from "$lib/components/VirtualOrderableGrid.svelte";
   import ControlledCheckbox from "$lib/components/input/ControlledCheckbox.svelte";
   import { confirmDialog } from "$lib/components/dialog/GlobalConfirmDialog.svelte";
   import {
+    exportCommands,
     updateCommandOrder,
     bulkDeleteCommands,
     createCommandsQuery,
@@ -46,10 +49,22 @@
       error: toastErrorMessage("Failed to delete commands"),
     });
   }
+
+  async function onBulkExport() {
+    const exportPromise = exportCommands(selection.take());
+
+    toast.promise(exportPromise, {
+      loading: "Exporting commands...",
+      success: "Exported commands",
+      error: toastErrorMessage("Failed to export commands"),
+    });
+  }
 </script>
 
 <PageLayoutList title="Commands" description="Custom twitch commands">
   {#snippet actions()}
+    <ImportCommands />
+
     <LinkButton href="/commands/create">Create</LinkButton>
   {/snippet}
 
@@ -73,6 +88,9 @@
       <div class="selection__gap"></div>
 
       <div class="selection__actions">
+        <Button onclick={onBulkExport} disabled={selection.isEmpty()}>
+          <ExportIcon /> Export
+        </Button>
         <Button onclick={onBulkDelete} disabled={selection.isEmpty()}>
           <DeleteIcon /> Delete
         </Button>

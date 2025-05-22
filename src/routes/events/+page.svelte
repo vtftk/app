@@ -2,12 +2,14 @@
   import type { VEvent } from "$lib/api/types";
 
   import { toast } from "svelte-sonner";
+  import ExportIcon from "~icons/solar/export-bold";
   import { toastErrorMessage } from "$lib/utils/error";
   import { filterNameSearch } from "$lib/utils/search";
   import DeleteIcon from "~icons/solar/trash-bin-2-bold";
   import Button from "$lib/components/input/Button.svelte";
   import EventItem from "$lib/sections/events/EventItem.svelte";
   import { createSelection } from "$lib/utils/selection.svelte";
+  import ImportEvents from "$lib/components/ImportEvents.svelte";
   import PageLayoutList from "$lib/layouts/PageLayoutList.svelte";
   import LinkButton from "$lib/components/input/LinkButton.svelte";
   import SearchInput from "$lib/components/form/SearchInput.svelte";
@@ -16,6 +18,7 @@
   import { confirmDialog } from "$lib/components/dialog/GlobalConfirmDialog.svelte";
   import {
     deleteEvents,
+    exportEvents,
     updateEventOrder,
     createEventsQuery,
   } from "$lib/api/eventModel";
@@ -46,6 +49,16 @@
       error: toastErrorMessage("Failed to delete events"),
     });
   }
+
+  async function onBulkExport() {
+    const exportPromise = exportEvents(selection.take());
+
+    toast.promise(exportPromise, {
+      loading: "Exporting events...",
+      success: "Exported events",
+      error: toastErrorMessage("Failed to export events"),
+    });
+  }
 </script>
 
 <PageLayoutList
@@ -53,6 +66,8 @@
   description="Setup specific triggers for events, such as throwing when a specific redeem is redeemed"
 >
   {#snippet actions()}
+    <ImportEvents />
+
     <LinkButton href="/events/create">Create</LinkButton>
   {/snippet}
 
@@ -76,6 +91,10 @@
       <div class="selection__gap"></div>
 
       <div class="selection__actions">
+        <Button onclick={onBulkExport} disabled={selection.isEmpty()}>
+          <ExportIcon /> Export
+        </Button>
+
         <Button onclick={onBulkDelete} disabled={selection.isEmpty()}>
           <DeleteIcon /> Delete
         </Button>

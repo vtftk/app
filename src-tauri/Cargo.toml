@@ -86,6 +86,7 @@ async-trait = "0.1.86"
 strum = { version = "0.27.1", features = ["derive"] }
 itertools = "0.14.0"
 parking_lot = "0.12.3"
+tauri-plugin-dialog = "2"
 
 [dependencies.sqlx]
 version = "0.8.2"

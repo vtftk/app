@@ -49,11 +49,12 @@ export function getCommandById(commandId: CommandId) {
 }
 
 export function exportCommands(commandIds: CommandId[]) {
-  return invoke<unknown[]>("export_commands", { commandIds });
+  return invoke<void>("export_commands", { commandIds });
 }
 
-export function importCommands(commands: unknown[]) {
-  return invoke("import_commands", { commands });
+export async function importCommands(commands: unknown[]) {
+  await invoke("import_commands", { commands });
+  invalidateCommandsList();
 }
 
 function invalidateCommandsList() {

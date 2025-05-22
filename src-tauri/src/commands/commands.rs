@@ -16,7 +16,8 @@ use crate::{
     export::{self, ExportedCommandModel},
 };
 use anyhow::Context;
-use tauri::State;
+use tauri::{async_runtime::spawn_blocking, AppHandle, State};
+use tauri_plugin_dialog::DialogExt;
 use uuid::Uuid;
 
 use super::CmdResult;
@@ -147,11 +148,35 @@ pub async fn delete_command_executions(
 #[tauri::command]
 pub async fn export_commands(
     command_ids: Vec<Uuid>,
+    app: AppHandle,
     db: State<'_, DbPool>,
-) -> CmdResult<Vec<ExportedCommandModel>> {
+) -> CmdResult<()> {
     let db = db.inner();
-    let events = export::export_commands(db, &command_ids).await?;
-    Ok(events)
+    let commands = export::export_commands(db, &command_ids).await?;
+    let data = serde_json::to_vec_pretty(&commands)?;
+
+    let file_path = spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .set_file_name("exported-commands.json")
+            .add_filter("JSON", &["json"])
+            .blocking_save_file()
+    })
+    .await?;
+
+    let file_path = match file_path {
+        Some(value) => value,
+        None => return Ok(()),
+    };
+
+    let path = match file_path.as_path() {
+        Some(value) => value,
+        None => return Ok(()),
+    };
+
+    tokio::fs::write(path, &data).await?;
+
+    Ok(())
 }
 
 #[tauri::command]

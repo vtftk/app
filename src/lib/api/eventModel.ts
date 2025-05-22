@@ -54,11 +54,12 @@ export function getEventById(eventId: EventId) {
 }
 
 export function exportEvents(eventIds: EventId[]) {
-  return invoke<unknown[]>("export_events", { eventIds });
+  return invoke<void>("export_events", { eventIds });
 }
 
-export function importEvents(events: unknown[]) {
-  return invoke("import_events", { events });
+export async function importEvents(events: unknown[]) {
+  await invoke("import_events", { events });
+  invalidateEventsList();
 }
 
 export async function createEvent(create: CreateEvent, invalidateList = true) {
