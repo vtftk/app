@@ -35,6 +35,7 @@ pub fn run() {
     use crate::commands::{calibration, commands, data, events, items, sounds, test, twitch};
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         // Don't allow creation of multiple windows, instead focus the existing window
         .plugin(tauri_plugin_single_instance::init(

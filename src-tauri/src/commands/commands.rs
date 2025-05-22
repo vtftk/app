@@ -18,6 +18,7 @@ use crate::{
 use anyhow::Context;
 use tauri::{async_runtime::spawn_blocking, AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_opener::reveal_item_in_dir;
 use uuid::Uuid;
 
 use super::CmdResult;
@@ -175,6 +176,8 @@ pub async fn export_commands(
     };
 
     tokio::fs::write(path, &data).await?;
+
+    _ = reveal_item_in_dir(path);
 
     Ok(())
 }
