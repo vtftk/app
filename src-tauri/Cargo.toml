@@ -19,7 +19,6 @@ deno_core = "0.323.0"
 [dependencies]
 # Tauri for frontend UI and its plugins
 tauri = { version = "2", features = ["tray-icon"] }
-tauri-plugin-shell = "2.2.0"
 tauri-plugin-single-instance = "2.2.0"
 tauri-plugin-updater = "2"
 

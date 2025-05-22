@@ -36,8 +36,6 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        // Shell access plugin
-        .plugin(tauri_plugin_shell::init())
         // Don't allow creation of multiple windows, instead focus the existing window
         .plugin(tauri_plugin_single_instance::init(
             handle_duplicate_instance,
