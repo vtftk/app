@@ -182,9 +182,7 @@ impl CommandModel {
 
     pub async fn update_order(db: &DbPool, data: Vec<UpdateOrdering>) -> DbResult<()> {
         for order_chunk in data.chunks(1000) {
-            let cases = std::iter::repeat("WHEN ? THEN ?")
-                .take(order_chunk.len())
-                .join(" ");
+            let cases = std::iter::repeat_n("WHEN ? THEN ?", order_chunk.len()).join(" ");
 
             let sql = format!(
                 r#"

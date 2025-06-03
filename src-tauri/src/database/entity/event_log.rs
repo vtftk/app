@@ -115,7 +115,7 @@ impl EventLogsModel {
             return Ok(());
         }
 
-        let placeholders = std::iter::repeat('?').take(ids.len()).join(",");
+        let placeholders = std::iter::repeat_n('?', ids.len()).join(",");
         let sql = format!(r#"DELETE FROM "event_logs" WHERE "id" IN ({placeholders})"#);
         let mut query = sqlx::query(&sql);
 

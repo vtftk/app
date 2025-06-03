@@ -58,7 +58,7 @@ impl CommandAliasModel {
         }
 
         // Generate the placeholders required to insert values
-        let values_sets = std::iter::repeat("(?,?,?,?)").take(aliases.len()).join(",");
+        let values_sets = std::iter::repeat_n("(?,?,?,?)", aliases.len()).join(",");
 
         let sql = format!(
             r#"INSERT INTO "command_alias" ("id", "command_id", "alias", "order) 

@@ -136,7 +136,7 @@ impl ItemModel {
             return Ok(Vec::new());
         }
 
-        let placeholders = std::iter::repeat('?').take(item_ids.len()).join(",");
+        let placeholders = std::iter::repeat_n('?', item_ids.len()).join(",");
         let sql = format!(
             r#"SELECT "item_id", "sound_id", "sound_type" FROM "items_sounds" WHERE "item_id" IN ({placeholders})"#
         );
@@ -208,7 +208,7 @@ impl ItemModel {
             return Ok(Vec::new());
         }
 
-        let placeholders = std::iter::repeat('?').take(ids.len()).join(",");
+        let placeholders = std::iter::repeat_n('?', ids.len()).join(",");
         let sql = format!(r#"SELECT * FROM "items" WHERE "id" IN ({placeholders})"#);
         let mut query = sqlx::query_as(&sql);
 
@@ -238,7 +238,7 @@ impl ItemModel {
         };
 
         // Create the value placeholders for the names
-        let placeholders = std::iter::repeat('?').take(names.len()).join(",");
+        let placeholders = std::iter::repeat_n('?', names.len()).join(",");
         let sql = format!(r#"SELECT * FROM "items" WHERE {name_column} IN ({placeholders})"#);
 
         let mut query = sqlx::query_as(&sql);
@@ -299,9 +299,7 @@ impl ItemModel {
 
     pub async fn update_order(db: &DbPool, data: Vec<UpdateOrdering>) -> DbResult<()> {
         for order_chunk in data.chunks(1000) {
-            let cases = std::iter::repeat("WHEN ? THEN ?")
-                .take(order_chunk.len())
-                .join(" ");
+            let cases = std::iter::repeat_n("WHEN ? THEN ?", order_chunk.len()).join(" ");
 
             let sql = format!(
                 r#"
@@ -362,7 +360,7 @@ impl ItemModel {
         }
 
         // Generate the placeholders required to insert values
-        let values_sets = std::iter::repeat("(?,?,?)").take(sound_ids.len()).join(",");
+        let values_sets = std::iter::repeat_n("(?,?,?)", sound_ids.len()).join(",");
         let sql = format!(
             r#"
             INSERT INTO "items_sounds" ("item_id", "sound_id", "sound_type") 

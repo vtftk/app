@@ -305,7 +305,7 @@ impl EventModel {
             return Ok(Vec::new());
         }
 
-        let placeholders = std::iter::repeat('?').take(ids.len()).join(",");
+        let placeholders = std::iter::repeat_n('?', ids.len()).join(",");
         let sql = format!(r#"SELECT * FROM "events" WHERE "id" IN ({placeholders})"#);
         let mut query = sqlx::query_as(&sql);
 
@@ -369,9 +369,7 @@ impl EventModel {
 
     pub async fn update_order(db: &DbPool, data: Vec<UpdateOrdering>) -> DbResult<()> {
         for order_chunk in data.chunks(1000) {
-            let cases = std::iter::repeat("WHEN ? THEN ?")
-                .take(order_chunk.len())
-                .join(" ");
+            let cases = std::iter::repeat_n("WHEN ? THEN ?", order_chunk.len()).join(" ");
 
             let sql = format!(
                 r#"

@@ -111,7 +111,7 @@ impl SoundModel {
             return Ok(Vec::new());
         }
 
-        let placeholders = std::iter::repeat('?').take(ids.len()).join(",");
+        let placeholders = std::iter::repeat_n('?', ids.len()).join(",");
         let sql = format!(r#"SELECT * FROM "sounds" WHERE "id" IN ({placeholders})"#);
         let mut query = sqlx::query_as(&sql);
 
@@ -129,7 +129,7 @@ impl SoundModel {
             return Ok(Vec::new());
         }
 
-        let placeholders = std::iter::repeat('?').take(ids.len()).join(",");
+        let placeholders = std::iter::repeat_n('?', ids.len()).join(",");
         let sql =
             format!(r#"SELECT "id", "src", "volume" FROM "sounds" WHERE "id" IN ({placeholders})"#);
         let mut query = sqlx::query_as(&sql);
@@ -167,7 +167,7 @@ impl SoundModel {
         };
 
         // Create the value placeholders for the names
-        let placeholders = std::iter::repeat('?').take(names.len()).join(",");
+        let placeholders = std::iter::repeat_n('?', names.len()).join(",");
         let sql = format!(r#"SELECT * FROM "sounds" WHERE {name_column} IN ({placeholders})"#);
 
         let mut query = sqlx::query_as(&sql);
@@ -209,8 +209,7 @@ impl SoundModel {
 
     pub async fn update_order(db: &DbPool, data: Vec<UpdateOrdering>) -> DbResult<()> {
         for order_chunk in data.chunks(1000) {
-            let cases = std::iter::repeat("WHEN ? THEN ?")
-                .take(order_chunk.len())
+            let cases = std::iter::repeat_n("WHEN ? THEN ?", order_chunk.len())
                 .join(" ");
 
             let sql = format!(

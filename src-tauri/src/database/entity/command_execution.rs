@@ -141,7 +141,7 @@ impl CommandExecutionModel {
             return Ok(());
         }
 
-        let placeholders = std::iter::repeat('?').take(ids.len()).join(",");
+        let placeholders = std::iter::repeat_n('?', ids.len()).join(",");
         let sql = format!(r#"DELETE FROM "command_executions" WHERE "id" IN ({placeholders})"#);
         let mut query = sqlx::query(&sql);
 
