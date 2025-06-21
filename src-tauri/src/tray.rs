@@ -30,7 +30,7 @@ pub fn create_tray_menu(app: &mut App) -> anyhow::Result<()> {
         .icon(icon)
         .tooltip("VTFTK")
         .menu(&menu)
-        .menu_on_left_click(true)
+        .show_menu_on_left_click(true)
         .on_menu_event(move |app, event| {
             if event.id() == open_i.id() {
                 handle_open_clicked(app).expect("failed to open")
