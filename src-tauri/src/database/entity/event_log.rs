@@ -65,14 +65,15 @@ impl EventLogsModel {
             .join(" OR ");
 
         let offset = if input.offset.is_some() && input.limit.is_some() {
-            "OFFSET ? LIMIT ?"
+            "LIMIT ? OFFSET ?"
         } else {
             ""
         };
 
         let sql = format!(
-            r#"SELECT * FROM "event_logs" WHERE {condition} {offset} 
-            ORDER BY "created_at" DESC"#
+            r#"SELECT * FROM "event_logs" WHERE {condition} 
+            ORDER BY "created_at" DESC 
+            {offset}"#
         );
 
         let mut query = sqlx::query_as(&sql)
@@ -92,7 +93,7 @@ impl EventLogsModel {
         }
 
         if let (Some(offset), Some(limit)) = (input.offset, input.limit) {
-            query = query.bind(offset as i64).bind(limit as i64)
+            query = query.bind(limit as i64).bind(offset as i64)
         }
 
         query.fetch_all(db).await

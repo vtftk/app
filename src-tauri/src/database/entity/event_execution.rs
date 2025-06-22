@@ -68,8 +68,9 @@ impl EventExecutionModel {
     ) -> DbResult<Option<EventExecutionModel>> {
         sqlx::query_as(
             r#"SELECT * FROM "event_executions" 
-            WHERE "event_id" = ? 
-            ORDER BY "created_at" DESC OFFSET ? LIMIT 1"#,
+            WHERE "event_id" = ?    
+            ORDER BY "created_at" DESC
+            LIMIT 1 OFFSET ?"#,
         )
         .bind(event_id)
         .bind(offset as i64)
@@ -92,14 +93,15 @@ impl EventExecutionModel {
             .join(" OR ");
 
         let offset = if input.offset.is_some() && input.limit.is_some() {
-            "OFFSET ? LIMIT ?"
+            "LIMIT ? OFFSET ?"
         } else {
             ""
         };
 
         let sql = format!(
-            r#"SELECT * FROM "event_executions" WHERE {condition} {offset} 
-            ORDER BY "created_at" DESC"#
+            r#"SELECT * FROM "event_executions" WHERE {condition} 
+            ORDER BY "created_at" DESC 
+            {offset}"#
         );
 
         let mut query = sqlx::query_as(&sql)
@@ -115,7 +117,7 @@ impl EventExecutionModel {
         }
 
         if let (Some(offset), Some(limit)) = (input.offset, input.limit) {
-            query = query.bind(offset as i64).bind(limit as i64)
+            query = query.bind(limit as i64).bind(offset as i64)
         }
 
         query.fetch_all(db).await

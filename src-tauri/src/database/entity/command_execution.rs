@@ -71,8 +71,9 @@ impl CommandExecutionModel {
     ) -> DbResult<Option<CommandExecutionModel>> {
         sqlx::query_as(
             r#"SELECT * FROM "command_executions" 
-            WHERE "command_id" = ? 
-            ORDER BY "created_at" DESC OFFSET ? LIMIT 1"#,
+            WHERE "command_id" = ?  
+            ORDER BY "created_at" DESC
+            LIMIT 1 OFFSET ?"#,
         )
         .bind(command_id)
         .bind(offset as i64)
@@ -95,14 +96,15 @@ impl CommandExecutionModel {
             .join(" OR ");
 
         let offset = if input.offset.is_some() && input.limit.is_some() {
-            "OFFSET ? LIMIT ?"
+            "LIMIT ? OFFSET ?"
         } else {
             ""
         };
 
         let sql = format!(
-            r#"SELECT * FROM "command_executions" WHERE {condition} {offset} 
-            ORDER BY "created_at" DESC"#
+            r#"SELECT * FROM "command_executions" WHERE {condition}
+            ORDER BY "created_at" DESC 
+            {offset}"#
         );
 
         let mut query = sqlx::query_as(&sql)
@@ -118,7 +120,7 @@ impl CommandExecutionModel {
         }
 
         if let (Some(offset), Some(limit)) = (input.offset, input.limit) {
-            query = query.bind(offset as i64).bind(limit as i64)
+            query = query.bind(limit as i64).bind(offset as i64)
         }
 
         query.fetch_all(db).await
