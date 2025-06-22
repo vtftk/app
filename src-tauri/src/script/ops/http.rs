@@ -2,7 +2,8 @@
 //!
 //! API for performing HTTP requests from within the JS runtime
 
-use deno_core::*;
+use deno_core::op2;
+use deno_error::JsErrorBox;
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr, DurationMilliSeconds, Map};
@@ -76,7 +77,7 @@ pub enum HttpResponseBody {
 /// Operation for performing a GET request to a specific URL from JS
 #[op2(async)]
 #[serde]
-pub async fn op_http_request(#[serde] req: HttpRequest) -> anyhow::Result<HttpResponse> {
+pub async fn op_http_request(#[serde] req: HttpRequest) -> Result<HttpResponse, JsErrorBox> {
     // Get or create HTTP client
     let client = reqwest::Client::new();
 
@@ -105,7 +106,10 @@ pub async fn op_http_request(#[serde] req: HttpRequest) -> anyhow::Result<HttpRe
         builder = builder.timeout(timeout);
     }
 
-    let response = builder.send().await?;
+    let response = builder.send().await.map_err(|err| {
+        log::error!("failed to send http request: {err}");
+        JsErrorBox::generic("failed to send http request")
+    })?;
 
     let status = response.status().as_u16();
     let headers: Vec<(String, String)> = response
@@ -121,15 +125,24 @@ pub async fn op_http_request(#[serde] req: HttpRequest) -> anyhow::Result<HttpRe
 
     let body = match req.response_format {
         ResponseFormat::Json => {
-            let value: serde_json::Value = response.json().await?;
+            let value: serde_json::Value = response.json().await.map_err(|err| {
+                log::error!("failed to parse json response: {err}");
+                JsErrorBox::generic("failed to parse json response")
+            })?;
             HttpResponseBody::Json(value)
         }
         ResponseFormat::Raw => {
-            let value = response.bytes().await?;
+            let value = response.bytes().await.map_err(|err| {
+                log::error!("failed to read response bytes: {err}");
+                JsErrorBox::generic("failed to read response bytes")
+            })?;
             HttpResponseBody::Raw(value.into())
         }
         ResponseFormat::Text => {
-            let value = response.text().await?;
+            let value = response.text().await.map_err(|err| {
+                log::error!("failed to read response text: {err}");
+                JsErrorBox::generic("failed to read response text")
+            })?;
             HttpResponseBody::Text(value)
         }
     };

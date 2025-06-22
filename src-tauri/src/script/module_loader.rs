@@ -1,8 +1,9 @@
 use deno_core::{
-    error::generic_error, resolve_import, resolve_path, ModuleLoadResponse, ModuleLoader,
+    error::ModuleLoaderError, resolve_import, resolve_path, ModuleLoadResponse, ModuleLoader,
     ModuleSource, ModuleSourceCode, ModuleSpecifier, ModuleType, RequestedModuleType,
     ResolutionKind,
 };
+use deno_error::JsErrorBox;
 use futures::FutureExt;
 use std::path::PathBuf;
 
@@ -15,7 +16,7 @@ impl AppModuleLoader {
         module_specifier: ModuleSpecifier,
         requested_module_type: RequestedModuleType,
         path: PathBuf,
-    ) -> anyhow::Result<ModuleSource> {
+    ) -> Result<ModuleSource, ModuleLoaderError> {
         let module_type = if let Some(extension) = path.extension() {
             let ext = extension.to_string_lossy().to_lowercase();
             // We only return JSON modules if extension was actually `.json`.
@@ -38,7 +39,7 @@ impl AppModuleLoader {
         // If we loaded a JSON file, but the "requested_module_type" (that is computed from
         // import attributes) is not JSON we need to fail.
         if module_type == ModuleType::Json && requested_module_type != RequestedModuleType::Json {
-            return Err(generic_error("Attempted to load JSON module without specifying \"type\": \"json\" attribute in the import statement."));
+            return Err(ModuleLoaderError::JsonMissingAttribute);
         }
 
         let code = tokio::fs::read(path).await?;
@@ -58,9 +59,10 @@ impl ModuleLoader for AppModuleLoader {
         specifier: &str,
         referrer: &str,
         _kind: ResolutionKind,
-    ) -> anyhow::Result<ModuleSpecifier> {
+    ) -> Result<ModuleSpecifier, ModuleLoaderError> {
         if specifier.starts_with("../") || specifier.starts_with("./") {
-            return Ok(resolve_path(specifier, &self.module_root)?);
+            return resolve_path(specifier, &self.module_root)
+                .map_err(|_| ModuleLoaderError::NotFound);
         }
 
         Ok(resolve_import(specifier, referrer)?)
@@ -82,9 +84,10 @@ impl ModuleLoader for AppModuleLoader {
             ),
 
             // Non file imports currently unsupported
-            Err(_) => ModuleLoadResponse::Sync(Err(generic_error(format!(
+            Err(_) => ModuleLoadResponse::Sync(Err(JsErrorBox::generic(format!(
                 "Provided module specifier \"{module_specifier}\" is not a file URL."
-            )))),
+            ))
+            .into())),
         }
     }
 }

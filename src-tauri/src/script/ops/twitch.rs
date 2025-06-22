@@ -1,5 +1,6 @@
 use crate::{script::runtime::ScriptRuntimeDataExt, twitch::manager::TWITCH_CLIENT_ID};
-use deno_core::*;
+use deno_core::{op2, OpState};
+use deno_error::JsErrorBox;
 use serde::Serialize;
 use std::{cell::RefCell, rc::Rc};
 use twitch_api::{
@@ -19,7 +20,7 @@ pub struct TwitchCredentials {
 #[serde]
 pub async fn op_twitch_get_credentials(
     state: Rc<RefCell<OpState>>,
-) -> anyhow::Result<Option<TwitchCredentials>> {
+) -> Result<Option<TwitchCredentials>, JsErrorBox> {
     let twitch = state.twitch()?;
     let token = match twitch.get_user_token() {
         Some(value) => value,

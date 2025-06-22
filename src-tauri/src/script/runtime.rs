@@ -21,8 +21,16 @@ use deno_core::{
     v8::{self, Global, Local},
     JsRuntime, OpState, PollEventLoopOptions, RuntimeOptions,
 };
+use deno_error::JsErrorBox;
 use serde::{Deserialize, Serialize};
-use std::{cell::RefCell, future::Future, path::PathBuf, pin::Pin, rc::Rc, task::Poll};
+use std::{
+    cell::{Ref, RefCell},
+    future::Future,
+    path::PathBuf,
+    pin::Pin,
+    rc::Rc,
+    task::Poll,
+};
 use tokio::{
     sync::{mpsc, oneshot},
     task::LocalSet,
@@ -187,7 +195,7 @@ fn spawn_script_promise(
     let resolve = js_runtime.resolve(global_promise);
     local_set.spawn_local(async move {
         let result = resolve.await;
-        _ = tx.send(result.map(|_| ()));
+        _ = tx.send(result.map(|_| ()).map_err(anyhow::Error::new));
     });
 }
 
@@ -212,7 +220,7 @@ pub fn create_script_executor(
         // Create runtime
         let js_runtime = JsRuntime::new(RuntimeOptions {
             startup_snapshot: Some(SCRIPT_RUNTIME_SNAPSHOT),
-            extensions: vec![api_extension::init_ops(runtime_data)],
+            extensions: vec![api_extension::init(runtime_data)],
             module_loader: Some(Rc::new(AppModuleLoader {
                 module_root: modules_path,
             })),
@@ -449,26 +457,35 @@ fn execute_script(
 /// Helper extension to extract script runtime fields
 /// from the shared OpState ref
 pub trait ScriptRuntimeDataExt {
-    fn overlay_sender(&self) -> anyhow::Result<OverlayMessageSender>;
-    fn db(&self) -> anyhow::Result<DbPool>;
-    fn twitch(&self) -> anyhow::Result<Twitch>;
+    fn try_borrow_state(&self) -> Result<Ref<'_, OpState>, JsErrorBox>;
+
+    fn overlay_sender(&self) -> Result<OverlayMessageSender, JsErrorBox>;
+    fn db(&self) -> Result<DbPool, JsErrorBox>;
+    fn twitch(&self) -> Result<Twitch, JsErrorBox>;
 }
 
 impl ScriptRuntimeDataExt for Rc<RefCell<OpState>> {
-    fn overlay_sender(&self) -> anyhow::Result<OverlayMessageSender> {
-        let state = self.try_borrow()?;
+    fn try_borrow_state(&self) -> Result<Ref<'_, OpState>, JsErrorBox> {
+        self.try_borrow().map_err(|err| {
+            log::error!("failed to get op state: {err}");
+            JsErrorBox::generic("failed to get op state")
+        })
+    }
+
+    fn overlay_sender(&self) -> Result<OverlayMessageSender, JsErrorBox> {
+        let state = self.try_borrow_state()?;
         let data = state.borrow::<ScriptRuntimeData>();
         Ok(data.overlay_sender.clone())
     }
 
-    fn db(&self) -> anyhow::Result<DbPool> {
-        let state = self.try_borrow()?;
+    fn db(&self) -> Result<DbPool, JsErrorBox> {
+        let state = self.try_borrow_state()?;
         let data = state.borrow::<ScriptRuntimeData>();
         Ok(data.db.clone())
     }
 
-    fn twitch(&self) -> anyhow::Result<Twitch> {
-        let state = self.try_borrow()?;
+    fn twitch(&self) -> Result<Twitch, JsErrorBox> {
+        let state = self.try_borrow_state()?;
         let data = state.borrow::<ScriptRuntimeData>();
         Ok(data.twitch.clone())
     }

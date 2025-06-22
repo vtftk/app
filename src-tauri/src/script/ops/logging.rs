@@ -5,7 +5,8 @@
 use std::{cell::RefCell, rc::Rc};
 
 use chrono::Utc;
-use deno_core::*;
+use deno_core::{op2, OpState};
+use deno_error::JsErrorBox;
 use log::error;
 
 use crate::{
@@ -23,7 +24,7 @@ pub fn op_log(
     #[serde] ctx: Option<RuntimeExecutionContext>,
     #[serde] level: LoggingLevelDb,
     #[string] message: String,
-) -> anyhow::Result<()> {
+) -> Result<(), JsErrorBox> {
     let db = state.db()?;
 
     let prefix = match ctx {

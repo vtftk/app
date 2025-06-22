@@ -35,7 +35,7 @@ fn create_runtime_snapshot() {
             cargo_manifest_dir: env!("CARGO_MANIFEST_DIR"),
             startup_snapshot: None,
             skip_op_registration: false,
-            extensions: vec![api_extension::init_ops_and_esm()],
+            extensions: vec![api_extension::init()],
             with_runtime_cb: None,
             extension_transpiler: None,
         },
