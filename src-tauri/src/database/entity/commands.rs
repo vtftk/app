@@ -124,7 +124,7 @@ impl CommandModel {
     /// and only commands that are enabled
     pub async fn get_by_command(db: &DbPool, command: &str) -> DbResult<Vec<CommandModel>> {
         sqlx::query_as(
-            r#"SELECT "c".* FROM "commands"
+            r#"SELECT "commands".* FROM "commands"
             LEFT JOIN "command_alias" ON "command_alias"."command_id" = "commands"."id"
             WHERE "commands"."enabled" = TRUE AND ("commands"."command" = ? OR "command_alias"."alias" = ?)
             GROUP BY "commands"."id"
