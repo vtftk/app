@@ -3,7 +3,7 @@ use crate::{
     events::matching::{EventData, EventInputData},
     overlay::OverlayMessageSender,
     script::ops::{
-        core::op_uuid_v4,
+        core::{op_sleep, op_uuid_v4},
         http::op_http_request,
         kv::{op_kv_get, op_kv_remove, op_kv_set},
         logging::op_log,
@@ -56,6 +56,7 @@ deno_core::extension!(
     ops = [
         // Core
         op_uuid_v4,
+        op_sleep,
         // HTTP
         op_http_request,
         // Logging
