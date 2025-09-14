@@ -30,6 +30,8 @@
     "unlisten",
     "vtftk",
     "vtube",
-    "webbrowser"
+    "webbrowser",
+    "singlefile",
+    "unplugin"
   ]
 }

@@ -1,0 +1,15 @@
+# Package Managers
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+bun.lock
+bun.lockb
+
+# Miscellaneous
+/static/
+/src-tauri/
+
+THIRD_PARTY_LICENSES.md
+
+/overlay/dist/
+/scripting/dist/
