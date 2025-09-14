@@ -68,17 +68,6 @@ pub struct TimerCompleted {
     pub event_id: Uuid,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TwitchUser {
-    pub id: UserId,
-    pub name: UserName,
-    #[serde(alias = "display_name")]
-    pub display_name: DisplayName,
-    #[serde(alias = "profile_image_url")]
-    pub profile_image_url: Option<String>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct TwitchEventUser {
