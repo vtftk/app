@@ -131,3 +131,15 @@ h6 {
   border-radius: 0.1rem;
   cursor: grab;
 }
+
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+li {
+  margin: 0;
+  padding: 0;
+}
