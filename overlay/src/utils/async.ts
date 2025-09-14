@@ -21,7 +21,7 @@ export async function executeInterval(
   return new Promise((resolve) => {
     let iteration: number = 0;
 
-    const intervalHandle: number = setInterval(() => {
+    const intervalHandle = setInterval(() => {
       action();
       iteration += 1;
 
