@@ -2,7 +2,6 @@ use crate::database::{DbErr, DbPool, DbResult};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
-use twitch_api::{helix::Scope, twitch_oauth2::AccessToken};
 
 #[derive(Clone, Debug, Serialize, Deserialize, FromRow)]
 pub struct AppDataModel {
@@ -102,13 +101,6 @@ impl Default for VTubeStudioConfig {
             port: 8001,
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(default)]
-pub struct TwitchConfig {
-    pub access_token: Option<AccessToken>,
-    pub scopes: Option<Vec<Scope>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -250,7 +242,7 @@ impl AppDataModel {
 
         sqlx::query(
             r#"
-            INSERT INTO "app_data" ("id", "data", "created_at", "last_modified_at") 
+            INSERT INTO "app_data" ("id", "data", "created_at", "last_modified_at")
             VALUES (?, ?, ?, ?)
             ON CONFLICT("id") DO UPDATE SET
                 "data" = excluded."data",
@@ -287,7 +279,7 @@ impl AppDataModel {
     pub async fn get_http_port(db: &DbPool) -> DbResult<u16> {
         let result: Option<(u16,)> = sqlx::query_as(
             r#"
-            SELECT COALESCE(JSON_EXTRACT(data, '$.main_config.http_port'), ?) 
+            SELECT COALESCE(JSON_EXTRACT(data, '$.main_config.http_port'), ?)
             FROM "app_data"
             WHERE "id" = ?
         "#,
@@ -305,7 +297,7 @@ impl AppDataModel {
     pub async fn get_main_config(db: &DbPool) -> DbResult<MainConfig> {
         let result: Option<(sqlx::types::Json<MainConfig>,)> = sqlx::query_as(
             r#"
-            SELECT JSON_EXTRACT(data, '$.main_config') 
+            SELECT JSON_EXTRACT(data, '$.main_config')
             FROM "app_data"
             WHERE "id" = ?
         "#,
