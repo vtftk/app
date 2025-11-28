@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createForm } from "felte";
+  import { resolve } from "$app/paths";
   import { toast } from "svelte-sonner";
   import { goto } from "$app/navigation";
   import { uploadFile } from "$lib/api/data";
@@ -121,7 +122,7 @@
 
         // Go back to the list when creating rather than editing
         if (!existing) {
-          goto("/throwables");
+          goto(resolve("/throwables"));
         }
       },
     });
@@ -353,7 +354,7 @@
   >
     <!-- Back button -->
     {#snippet beforeTitle()}
-      <LinkButton href="/throwables">
+      <LinkButton href={resolve("/throwables")}>
         <SolarAltArrowLeftBold />
       </LinkButton>
     {/snippet}

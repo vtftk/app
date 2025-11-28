@@ -11,7 +11,6 @@
 
 <Switch.Root {...props} {checked} {onCheckedChange}>
   {#snippet child({ checked, props })}
-    <!-- svelte-ignore a11y_consider_explicit_label -->
     <button {...props} class="switch" data-checked={checked}>
       <span class="switch-thumb"></span>
     </button>

@@ -16,7 +16,7 @@
 </script>
 
 <div class="grid">
-  {#each selectedOptions as option}
+  {#each selectedOptions as option (option.id)}
     <li class="item">
       <p class="item__name">{option.name}</p>
     </li>

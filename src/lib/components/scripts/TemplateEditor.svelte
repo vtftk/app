@@ -82,6 +82,7 @@
     const selection = saveSelection(editor);
 
     // Replace $(variable) with highlighted spans
+    // eslint-disable-next-line svelte/no-dom-manipulating
     editor.innerHTML = escapeHTML(value).replace(
       /\$\(([^)]+)\)/g,
       '<span class="variable">$($1)</span>',
@@ -141,7 +142,7 @@
     <p>The following templates will be replaced if they are found</p>
 
     <ul class="templates">
-      {#each templates as template}
+      {#each templates as template (template.key)}
         <li class="template">
           <span>$({template.key})</span> - {template.description}
         </li>

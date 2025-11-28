@@ -22,11 +22,7 @@
 
   const firstTabValue = $derived(tabs.length > 0 ? tabs[0].value : undefined);
 
-  let value: string = $state("");
-
-  $effect(() => {
-    value = firstTabValue ?? "";
-  });
+  let value: string = $derived(firstTabValue ?? "");
 </script>
 
 <Tabs.Root bind:value>

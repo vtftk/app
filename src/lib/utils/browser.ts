@@ -29,7 +29,7 @@ export const passiveEventArg = (() => {
     window.addEventListener("testpassive", arg, arg);
     // @ts-expect-error Testing passive
     window.remove("testpassive", arg, arg);
-  } catch (_e) {
+  } catch {
     /* */
   }
 

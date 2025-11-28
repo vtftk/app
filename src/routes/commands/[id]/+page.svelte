@@ -1,10 +1,14 @@
 <script lang="ts">
-  import { page } from "$app/state";
+  import { resolve } from "$app/paths";
   import { createCommandQuery } from "$lib/api/commandModel";
   import PageLayoutList from "$lib/layouts/PageLayoutList.svelte";
   import CommandForm from "$lib/sections/commands/CommandForm.svelte";
 
-  const commandQuery = $derived(createCommandQuery(page.params.id));
+  import type { PageProps } from "./$types";
+
+  const { params }: PageProps = $props();
+
+  const commandQuery = $derived(createCommandQuery(params.id));
 </script>
 
 {#if $commandQuery.isLoading}
@@ -17,7 +21,7 @@
   <CommandForm existing={$commandQuery.data} />
 {:else}
   {#snippet actions()}
-    <a type="button" href="/commands">Back</a>
+    <a type="button" href={resolve("/commands")}>Back</a>
   {/snippet}
 
   <PageLayoutList

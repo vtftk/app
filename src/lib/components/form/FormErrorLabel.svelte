@@ -11,7 +11,7 @@
 <ValidationMessage for={name} let:messages>
   {#if messages && messages.length > 0}
     <ul class="error-label" id="{name}-validation" aria-live="polite">
-      {#each messages as message}
+      {#each messages as message, index (index)}
         <li>{message}</li>
       {/each}
     </ul>

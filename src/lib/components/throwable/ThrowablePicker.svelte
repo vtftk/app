@@ -68,47 +68,45 @@
     Choose which items will be thrown
   {/snippet}
 
-  {#snippet children()}
-    <div class="selection">
-      <ControlledCheckbox
-        checked={items.length > 0 && selected.length === items.length}
-        onCheckedChange={onToggleAll}
-      />
-
-      <SearchInput bind:value={search} placeholder="Search" />
-    </div>
-
-    <div class="throwable-table-wrapper">
-      <div class="items">
-        {#each filteredItems as item (item.id)}
-          <div class="item">
-            <div class="item-column item-column--checkbox">
-              <ControlledCheckbox
-                checked={selected.includes(item.id)}
-                onCheckedChange={() => onSelectItem(item)}
-              />
-            </div>
-
-            <div class="item-column item-column--preview">
-              <div class="throwable__image-wrapper">
-                <img
-                  class="throwable__image"
-                  src={getBackendURL(serverContext, item.config.image.src)}
-                  alt="Throwable"
-                />
-              </div>
-            </div>
-
-            <div class="item-column item-column--name">{item.name}</div>
-          </div>
-        {/each}
-      </div>
-    </div>
-  {/snippet}
-
   {#snippet actions()}
     <DialogCloseButton buttonLabel={{ text: "Close" }} />
   {/snippet}
+
+  <div class="selection">
+    <ControlledCheckbox
+      checked={items.length > 0 && selected.length === items.length}
+      onCheckedChange={onToggleAll}
+    />
+
+    <SearchInput bind:value={search} placeholder="Search" />
+  </div>
+
+  <div class="throwable-table-wrapper">
+    <div class="items">
+      {#each filteredItems as item (item.id)}
+        <div class="item">
+          <div class="item-column item-column--checkbox">
+            <ControlledCheckbox
+              checked={selected.includes(item.id)}
+              onCheckedChange={() => onSelectItem(item)}
+            />
+          </div>
+
+          <div class="item-column item-column--preview">
+            <div class="throwable__image-wrapper">
+              <img
+                class="throwable__image"
+                src={getBackendURL(serverContext, item.config.image.src)}
+                alt="Throwable"
+              />
+            </div>
+          </div>
+
+          <div class="item-column item-column--name">{item.name}</div>
+        </div>
+      {/each}
+    </div>
+  </div>
 </Dialog>
 
 {#if selectedOptions.length > 0}
@@ -117,7 +115,7 @@
 
     <div class="grid-wrapper">
       <div class="grid">
-        {#each selectedOptions as option}
+        {#each selectedOptions as option (option.id)}
           <li class="grid-item">
             <div class="grid-item__image throwable__image-wrapper">
               <img

@@ -94,7 +94,7 @@
     const model = monaco.editor.createModel(value, language);
     editor.setModel(model);
 
-    editor.onDidChangeModelContent((event) => {
+    editor.onDidChangeModelContent(() => {
       const newValue = model.getValue();
       onChange(newValue);
     });

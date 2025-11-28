@@ -19,22 +19,20 @@
   <!-- Title -->
   {#snippet title()}Metadata{/snippet}
 
-  <!-- Content -->
-  {#snippet children()}
-    <section class="editor">
-      <MonacoEditor
-        language="json"
-        value={metadataValue}
-        readOnly
-        onChange={() => {}}
-      />
-    </section>
-  {/snippet}
-
   <!-- Action buttons -->
   {#snippet actions()}
     <DialogCloseButton buttonLabel={{ text: "Close" }} />
   {/snippet}
+
+  <!-- Content -->
+  <section class="editor">
+    <MonacoEditor
+      language="json"
+      value={metadataValue}
+      readOnly
+      onChange={() => {}}
+    />
+  </section>
 </Dialog>
 
 <style>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { z } from "zod";
   import { createForm } from "felte";
+  import { resolve } from "$app/paths";
   import { toast } from "svelte-sonner";
   import { goto } from "$app/navigation";
   import { validator } from "@felte/validator-zod";
@@ -141,7 +142,7 @@ return message;
       saveWithToast(values);
 
       if (!existing) {
-        goto("/commands");
+        goto(resolve("/commands"));
       }
     },
   });
@@ -301,7 +302,7 @@ return message;
 
     {#if $data.aliases.length > 0}
       <ul class="aliases">
-        {#each $data.aliases as _alias, index}
+        {#each $data.aliases as _alias, index (index)}
           <li class="alias">
             <TextInputBase name={`aliases.${index}`} placeholder="!alias" />
             <Button onclick={() => handleRemoveAlias(index)}>
@@ -444,7 +445,7 @@ return message;
   >
     <!-- Back button -->
     {#snippet beforeTitle()}
-      <LinkButton href="/commands">
+      <LinkButton href={resolve("/commands")}>
         <SolarAltArrowLeftBold />
       </LinkButton>
     {/snippet}

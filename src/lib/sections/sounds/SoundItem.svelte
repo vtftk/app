@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Sound } from "$lib/api/types";
 
+  import { resolve } from "$app/paths";
   import { toast } from "svelte-sonner";
   import getBackendURL from "$lib/utils/url";
   import { deleteSound } from "$lib/api/soundModel";
@@ -56,7 +57,7 @@
     src={getBackendURL(serverContext, config.src)}
     volume={config.volume * appData.sounds_config.global_volume}
   />
-  <LinkButton href="/sounds/{config.id}">
+  <LinkButton href={resolve("/sounds/[id]", { id: config.id })}>
     <SettingsIcon /> View
   </LinkButton>
   <Button onclick={onDelete}><DeleteIcon /> Delete</Button>
@@ -66,7 +67,9 @@
   <ControlledCheckbox checked={selected} onCheckedChange={onToggleSelected} />
 
   <div class="sound__text">
-    <a class="sound__name" href="/sounds/{config.id}">{config.name}</a>
+    <a class="sound__name" href={resolve("/sounds/[id]", { id: config.id })}>
+      {config.name}
+    </a>
   </div>
 
   <div class="action">

@@ -39,11 +39,7 @@
   }: Props = $props();
 
   let search = $state("");
-  let selected: SoundId[] = $state([]);
-
-  $effect(() => {
-    selected = initialSelected;
-  });
+  let selected: SoundId[] = $derived(initialSelected);
 
   const serverContext = getServerContext();
   const appContext = getAppContext();
@@ -94,54 +90,6 @@
     {descriptionLabel}
   {/snippet}
 
-  {#snippet children()}
-    <div class="selection">
-      <SearchInput bind:value={search} placeholder="Search" />
-    </div>
-
-    <div class="sound-table-wrapper">
-      <table class="sound-table">
-        <thead>
-          <tr>
-            <th class="sound-column sound-column--checkbox">
-              <ControlledCheckbox
-                id="terms"
-                aria-labelledby="terms-label"
-                checked={sounds.length > 0 && selected.length === sounds.length}
-                onCheckedChange={onToggleAll}
-              />
-            </th>
-            <th class="sound-column sound-column--name">Sound Name</th>
-            <th class="sound-column sound-column--preview">Preview</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each sounds as sound (sound.id)}
-            <tr class="sound-row">
-              <td class="sound-column sound-column--checkbox">
-                <ControlledCheckbox
-                  id="terms"
-                  aria-labelledby="terms-label"
-                  checked={selected.includes(sound.id)}
-                  onCheckedChange={() => onSelectSound(sound)}
-                />
-              </td>
-
-              <td class="sound-column sound-column--name"> {sound.name} </td>
-
-              <td class="sound-column sound-column--preview">
-                <SoundPreview
-                  volume={sound.volume * appData.sounds_config.global_volume}
-                  src={getBackendURL(serverContext, sound.src)}
-                />
-              </td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
-  {/snippet}
-
   {#snippet actions()}
     <BulkSoundImport label="Import Sounds" />
 
@@ -151,6 +99,52 @@
       onclick={onSave}
     />
   {/snippet}
+
+  <div class="selection">
+    <SearchInput bind:value={search} placeholder="Search" />
+  </div>
+
+  <div class="sound-table-wrapper">
+    <table class="sound-table">
+      <thead>
+        <tr>
+          <th class="sound-column sound-column--checkbox">
+            <ControlledCheckbox
+              id="terms"
+              aria-labelledby="terms-label"
+              checked={sounds.length > 0 && selected.length === sounds.length}
+              onCheckedChange={onToggleAll}
+            />
+          </th>
+          <th class="sound-column sound-column--name">Sound Name</th>
+          <th class="sound-column sound-column--preview">Preview</th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each sounds as sound (sound.id)}
+          <tr class="sound-row">
+            <td class="sound-column sound-column--checkbox">
+              <ControlledCheckbox
+                id="terms"
+                aria-labelledby="terms-label"
+                checked={selected.includes(sound.id)}
+                onCheckedChange={() => onSelectSound(sound)}
+              />
+            </td>
+
+            <td class="sound-column sound-column--name"> {sound.name} </td>
+
+            <td class="sound-column sound-column--preview">
+              <SoundPreview
+                volume={sound.volume * appData.sounds_config.global_volume}
+                src={getBackendURL(serverContext, sound.src)}
+              />
+            </td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
 </Dialog>
 
 <style>

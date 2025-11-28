@@ -1,10 +1,14 @@
 <script lang="ts">
-  import { page } from "$app/state";
+  import { resolve } from "$app/paths";
   import { createSoundQuery } from "$lib/api/soundModel";
   import SoundForm from "$lib/sections/sounds/SoundForm.svelte";
   import PageLayoutList from "$lib/layouts/PageLayoutList.svelte";
 
-  const soundQuery = $derived(createSoundQuery(page.params.id));
+  import type { PageProps } from "./$types";
+
+  const { params }: PageProps = $props();
+
+  const soundQuery = $derived(createSoundQuery(params.id));
 </script>
 
 {#if $soundQuery.isLoading}
@@ -17,7 +21,7 @@
   <SoundForm existing={$soundQuery.data} />
 {:else}
   {#snippet actions()}
-    <a type="button" href="/sounds">Back</a>
+    <a type="button" href={resolve("/sounds")}>Back</a>
   {/snippet}
 
   <PageLayoutList

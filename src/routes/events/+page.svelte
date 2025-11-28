@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { VEvent } from "$lib/api/types";
 
+  import { resolve } from "$app/paths";
   import { toast } from "svelte-sonner";
   import ExportIcon from "~icons/solar/export-bold";
   import { toastErrorMessage } from "$lib/utils/error";
@@ -68,7 +69,7 @@
   {#snippet actions()}
     <ImportEvents />
 
-    <LinkButton href="/events/create">Create</LinkButton>
+    <LinkButton href={resolve("/events/create")}>Create</LinkButton>
   {/snippet}
 
   {#snippet beforeContent()}

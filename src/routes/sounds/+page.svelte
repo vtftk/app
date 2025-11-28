@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Sound } from "$lib/api/types";
 
+  import { resolve } from "$app/paths";
   import { toast } from "svelte-sonner";
   import { toastErrorMessage } from "$lib/utils/error";
   import { filterNameSearch } from "$lib/utils/search";
@@ -59,7 +60,7 @@
       Create
 
       {#snippet content()}
-        <LinkButton href="/sounds/create">Create Sound</LinkButton>
+        <LinkButton href={resolve("/sounds/create")}>Create Sound</LinkButton>
         <BulkSoundImport />
       {/snippet}
     </PopoverButton>

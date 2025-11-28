@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Item } from "$lib/api/types";
 
+  import { resolve } from "$app/paths";
   import { toast } from "svelte-sonner";
   import getBackendURL from "$lib/utils/url";
   import { toastErrorMessage } from "$lib/utils/error";
@@ -76,7 +77,7 @@
     <BallsIcon /> Test Barrage
   </PopoverCloseButton>
 
-  <LinkButton href="/throwables/{config.id}">
+  <LinkButton href={resolve("/throwables/[id]", { id: config.id })}>
     <SettingsIcon /> View
   </LinkButton>
 
@@ -105,7 +106,9 @@
   </div>
 
   <div class="item__text">
-    <a href="/throwables/{config.id}" class="item__name">{config.name}</a>
+    <a href={resolve("/throwables/[id]", { id: config.id })} class="item__name">
+      {config.name}
+    </a>
   </div>
 
   <PopoverButton

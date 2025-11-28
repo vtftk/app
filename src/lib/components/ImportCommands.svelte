@@ -23,7 +23,7 @@
   function clearFileInput(ctrl: HTMLInputElement) {
     try {
       ctrl.value = "";
-    } catch (_) {
+    } catch {
       //
     }
 

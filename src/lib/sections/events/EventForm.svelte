@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createForm } from "felte";
+  import { resolve } from "$app/paths";
   import { toast } from "svelte-sonner";
   import { goto } from "$app/navigation";
   import { type VEvent } from "$lib/api/types";
@@ -98,7 +99,7 @@
       await save(values);
 
       if (!existing) {
-        goto("/events");
+        goto(resolve("/events"));
       }
     },
   });
@@ -934,7 +935,7 @@
   >
     <!-- Back button -->
     {#snippet beforeTitle()}
-      <LinkButton href="/events">
+      <LinkButton href={resolve("/events")}>
         <SolarAltArrowLeftBold />
       </LinkButton>
     {/snippet}

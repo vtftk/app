@@ -105,7 +105,7 @@
         </tr>
       </thead>
       <tbody>
-        {#each executions as exec}
+        {#each executions as exec (exec.id)}
           <tr>
             <td class="column--select">
               <div class="select-actions">

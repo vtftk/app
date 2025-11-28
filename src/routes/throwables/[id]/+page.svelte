@@ -1,11 +1,15 @@
 <script lang="ts">
-  import { page } from "$app/state";
+  import { resolve } from "$app/paths";
   import { createItemQuery } from "$lib/api/itemModel";
   import PageLayoutList from "$lib/layouts/PageLayoutList.svelte";
   import LinkButton from "$lib/components/input/LinkButton.svelte";
   import ThrowableForm from "$lib/sections/throwables/ThrowableForm.svelte";
 
-  const itemQuery = $derived(createItemQuery(page.params.id));
+  import type { PageProps } from "./$types";
+
+  const { params }: PageProps = $props();
+
+  const itemQuery = $derived(createItemQuery(params.id));
 </script>
 
 {#if $itemQuery.isLoading}
@@ -18,7 +22,7 @@
   <ThrowableForm existing={$itemQuery.data} />
 {:else}
   {#snippet actions()}
-    <LinkButton href="/throwables">Back</LinkButton>
+    <LinkButton href={resolve("/throwables")}>Back</LinkButton>
   {/snippet}
 
   <PageLayoutList

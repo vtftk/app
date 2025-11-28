@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Debounced } from "runed";
+  import { resolve } from "$app/paths";
   import Label from "$lib/components/Label.svelte";
   import Card from "$lib/components/card/Card.svelte";
   import { createModelDataQuery } from "$lib/api/calibration";
@@ -51,7 +52,9 @@
           {#if runtimeAppData.vtube_studio_auth}
             {#if modelCalibrated}
               <div class="actions">
-                <LinkButton href="/calibration">Recalibrate Model</LinkButton>
+                <LinkButton href={resolve("/calibration")}>
+                  Recalibrate Model
+                </LinkButton>
               </div>
             {:else}
               <span class="warning">
@@ -60,7 +63,9 @@
               </span>
 
               <div class="actions">
-                <LinkButton href="/calibration">Calibrate Model</LinkButton>
+                <LinkButton href={resolve("/calibration")}>
+                  Calibrate Model
+                </LinkButton>
               </div>
             {/if}
           {:else}

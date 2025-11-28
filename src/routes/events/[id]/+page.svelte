@@ -1,11 +1,15 @@
 <script lang="ts">
-  import { page } from "$app/state";
+  import { resolve } from "$app/paths";
   import { createEventQuery } from "$lib/api/eventModel";
   import EventForm from "$lib/sections/events/EventForm.svelte";
   import PageLayoutList from "$lib/layouts/PageLayoutList.svelte";
   import LinkButton from "$lib/components/input/LinkButton.svelte";
 
-  const eventQuery = $derived(createEventQuery(page.params.id));
+  import type { PageProps } from "./$types";
+
+  const { params }: PageProps = $props();
+
+  const eventQuery = $derived(createEventQuery(params.id));
 </script>
 
 {#if $eventQuery.isLoading}
@@ -18,7 +22,7 @@
   <EventForm existing={$eventQuery.data} />
 {:else}
   {#snippet actions()}
-    <LinkButton href="/events">Back</LinkButton>
+    <LinkButton href={resolve("/events")}>Back</LinkButton>
   {/snippet}
 
   <PageLayoutList

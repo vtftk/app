@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Command } from "$lib/api/types";
 
+  import { resolve } from "$app/paths";
   import { toast } from "svelte-sonner";
   import ExportIcon from "~icons/solar/export-bold";
   import { toastErrorMessage } from "$lib/utils/error";
@@ -65,7 +66,7 @@
   {#snippet actions()}
     <ImportCommands />
 
-    <LinkButton href="/commands/create">Create</LinkButton>
+    <LinkButton href={resolve("/commands/create")}>Create</LinkButton>
   {/snippet}
 
   {#snippet beforeContent()}

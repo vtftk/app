@@ -97,7 +97,7 @@
           <div {...wrapperProps} class="content-wrapper">
             {#if open}
               <div {...props} class="content">
-                {#each items as value}
+                {#each items as value, index (index)}
                   <Select.Item value={value.value} label={value.label}>
                     {#snippet child({ props, selected, highlighted })}
                       <div

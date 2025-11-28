@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Command } from "$lib/api/types";
 
+  import { resolve } from "$app/paths";
   import { toast } from "svelte-sonner";
   import { toastErrorMessage } from "$lib/utils/error";
   import SettingsIcon from "~icons/solar/settings-bold";
@@ -61,7 +62,7 @@
 </script>
 
 {#snippet popoverContent()}
-  <LinkButton href="/commands/{config.id}">
+  <LinkButton href={resolve("/commands/[id]", { id: config.id })}>
     <SettingsIcon /> View
   </LinkButton>
   <Button onclick={onDelete}><DeleteIcon /> Delete</Button>
@@ -71,7 +72,9 @@
   <ControlledCheckbox checked={selected} onCheckedChange={onToggleSelected} />
 
   <div class="item__text">
-    <a class="item__name" href="/commands/{config.id}">{config.name}</a>
+    <a class="item__name" href={resolve("/commands/[id]", { id: config.id })}>
+      {config.name}
+    </a>
   </div>
 
   <div class="actions">

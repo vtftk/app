@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from "$app/paths";
   import HomeBoldDuotone from "~icons/solar/home-bold-duotone";
   import SolarBellBoldDuotone from "~icons/solar/bell-bold-duotone";
   import SolarSettingsBoldDuotone from "~icons/solar/settings-bold-duotone";
@@ -14,7 +15,7 @@
     <li>
       <NavButton
         icon={HomeBoldDuotone}
-        href="/"
+        href={resolve("/")}
         title="Home"
         text="General details"
       />
@@ -22,7 +23,7 @@
     <li>
       <NavButton
         icon={SolarBasketballBoldDuotone}
-        href="/throwables"
+        href={resolve("/throwables")}
         title="Throwables"
         text="Items that can be thrown"
       />
@@ -30,7 +31,7 @@
     <li>
       <NavButton
         icon={SolarBellBoldDuotone}
-        href="/events"
+        href={resolve("/events")}
         title="Events"
         text="Events that can trigger actions"
       />
@@ -38,7 +39,7 @@
     <li>
       <NavButton
         icon={SolarHeadphonesRoundSoundBoldDuotone}
-        href="/sounds"
+        href={resolve("/sounds")}
         title="Sounds"
         text="Sounds that can be triggered"
       />
@@ -46,7 +47,7 @@
     <li>
       <NavButton
         icon={SolarChatSquareCodeBoldDuotone}
-        href="/commands"
+        href={resolve("/commands")}
         title="Commands"
         text="Custom commands"
       />
@@ -54,7 +55,7 @@
     <li>
       <NavButton
         icon={SolarSettingsBoldDuotone}
-        href="/settings"
+        href={resolve("/settings")}
         title="Settings"
         text="Configuration options"
       />

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Item, Sound } from "$lib/api/types";
 
+  import { resolve } from "$app/paths";
   import { toast } from "svelte-sonner";
   import { toastErrorMessage } from "$lib/utils/error";
   import { filterNameSearch } from "$lib/utils/search";
@@ -125,7 +126,9 @@
 
       <!-- Content for the "Test" button popover -->
       {#snippet content()}
-        <LinkButton href="/throwables/create">Create Throwable</LinkButton>
+        <LinkButton href={resolve("/throwables/create")}>
+          Create Throwable
+        </LinkButton>
         <BulkThrowableImport />
       {/snippet}
     </PopoverButton>

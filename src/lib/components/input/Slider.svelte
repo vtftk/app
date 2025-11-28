@@ -22,7 +22,7 @@
             <span {...props} class="range"></span>
           {/snippet}
         </Slider.Range>
-        {#each thumbs as index}
+        {#each thumbs as index (index)}
           <Slider.Thumb {index}>
             {#snippet child({ props })}
               <span {...props} class="thumb"></span>
@@ -31,7 +31,7 @@
         {/each}
 
         {#if showTicks}
-          {#each ticks as index}
+          {#each ticks as index (index)}
             <Slider.Tick {index}>
               {#snippet child({ props })}
                 <span {...props} class="tick"></span>

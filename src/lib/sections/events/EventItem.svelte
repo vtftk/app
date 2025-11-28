@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from "$app/paths";
   import { toast } from "svelte-sonner";
   import { toastErrorMessage } from "$lib/utils/error";
   import SettingsIcon from "~icons/solar/settings-bold";
@@ -99,7 +100,7 @@
   <PopoverCloseButton type="button" onclick={onTest}>
     <BallIcon /> Test
   </PopoverCloseButton>
-  <LinkButton href="/events/{config.id}">
+  <LinkButton href={resolve("/events/[id]", { id: config.id })}>
     <SettingsIcon /> View
   </LinkButton>
   <Button onclick={onDelete}><DeleteIcon /> Delete</Button>
@@ -110,7 +111,11 @@
     <ControlledCheckbox checked={selected} onCheckedChange={onToggleSelected} />
 
     <div class="event__content">
-      <a title={config.name} href="/events/{config.id}" class="event__name">
+      <a
+        title={config.name}
+        href={resolve("/events/[id]", { id: config.id })}
+        class="event__name"
+      >
         {config.name}
       </a>
     </div>

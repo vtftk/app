@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from "$app/paths";
   import { onMount, onDestroy } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
@@ -196,7 +197,7 @@
 
     <div class="actions">
       {#if calibrationStep == CalibrationStep.NotStarted}
-        <LinkButton href="/" onclick={onReset}>Cancel</LinkButton>
+        <LinkButton href={resolve("/")} onclick={onReset}>Cancel</LinkButton>
 
         <Button
           onclick={() => {
@@ -207,7 +208,7 @@
           Start
         </Button>
       {:else if calibrationStep == CalibrationStep.Smallest}
-        <LinkButton variant="warning" href="/" onclick={onReset}>
+        <LinkButton variant="warning" href={resolve("/")} onclick={onReset}>
           Cancel
         </LinkButton>
 
@@ -222,7 +223,7 @@
           Done
         </Button>
       {:else if calibrationStep == CalibrationStep.Largest}
-        <LinkButton variant="warning" href="/" onclick={onReset}>
+        <LinkButton variant="warning" href={resolve("/")} onclick={onReset}>
           Cancel
         </LinkButton>
 
@@ -237,7 +238,7 @@
           Done
         </Button>
       {:else if calibrationStep == CalibrationStep.Complete}
-        <LinkButton onclick={onReset} href="/">Close</LinkButton>
+        <LinkButton onclick={onReset} href={resolve("/")}>Close</LinkButton>
       {/if}
     </div>
   </div>

@@ -28,7 +28,7 @@
   };
 
   const {
-    items: _items,
+    items: itemsInput,
     item: renderItem,
     itemHeight = 68,
     onUpdateOrder,
@@ -40,12 +40,7 @@
   let wrapperStyle = $state("");
 
   // Local state for list of items to allow reordering
-  let items: T[] = $state([]);
-
-  // Update the items when the props change
-  $effect(() => {
-    items = _items;
-  });
+  let items: T[] = $derived(itemsInput);
 
   const styleCache: Partial<Record<number, string>> = {};
   const rowCount = $derived(Math.ceil(items.length / 2));
