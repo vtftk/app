@@ -23,7 +23,7 @@
   const serverContext = getServerContext();
   const itemsQuery = createItemsQuery();
 
-  const items = $derived($itemsQuery.data ?? []);
+  const items = $derived(itemsQuery.data ?? []);
   const filteredItems = $derived(filterNameSearch(items, search));
   const selectedOptions = $derived(filterOptionsSelected(items, selected));
 
@@ -48,7 +48,7 @@
   };
 </script>
 
-{#if $itemsQuery.isLoading}
+{#if itemsQuery.isLoading}
   <div class="skeleton" style="width: 90%; height: 1.5rem; padding: 1rem"></div>
 {/if}
 

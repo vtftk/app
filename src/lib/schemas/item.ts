@@ -5,13 +5,12 @@ import { z } from "zod";
 export const throwableImageSchema = z.union(
   [
     z.instanceof(File, {
-      message: "Image file is required",
-      fatal: true,
+      error: "Image file is required",
     }),
     z.string(),
   ],
   {
-    message: "Image is required",
+    error: "Image is required",
   },
 );
 

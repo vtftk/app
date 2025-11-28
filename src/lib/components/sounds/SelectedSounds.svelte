@@ -8,7 +8,7 @@
   const { soundIds }: Props = $props();
 
   const soundsQuery = createSoundsQuery();
-  const sounds = $derived($soundsQuery.data ?? []);
+  const sounds = $derived(soundsQuery.data ?? []);
 
   const selectedOptions = $derived(
     sounds.filter((sound) => soundIds.includes(sound.id)),

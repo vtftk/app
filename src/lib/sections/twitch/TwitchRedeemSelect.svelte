@@ -28,7 +28,7 @@
   const redeemsList = createGetRedeemsList();
 
   const items = $derived(
-    ($redeemsList.data ?? []).map((item) => ({
+    (redeemsList.data ?? []).map((item) => ({
       value: item.id,
       label: item.title,
       description: item.prompt,
@@ -65,7 +65,7 @@
   <p class="description">{description}</p>
 {/if}
 
-{#if $redeemsList.isLoading}
+{#if redeemsList.isLoading}
   <div class="skeleton" style="width: 90%; height: 1.5rem; padding: 1rem"></div>
 {/if}
 

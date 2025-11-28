@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type * as Monaco from "monaco-editor/esm/vs/editor/editor.api";
+  import type * as Monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 
   import { onMount, onDestroy } from "svelte";
 

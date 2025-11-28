@@ -28,7 +28,7 @@
 
   let search = $state("");
 
-  const commands = $derived($commandsQuery.data ?? []);
+  const commands = $derived(commandsQuery.data ?? []);
   const selection = createSelection(() => commands);
   const filteredCommands = $derived(filterNameSearch(commands, search));
 

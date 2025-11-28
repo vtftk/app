@@ -35,8 +35,7 @@
   // string to account for already uploaded file URLs
   const soundSchema = z
     .instanceof(File, {
-      message: "Sound file is required",
-      fatal: true,
+      error: "Sound file is required",
     })
     .or(z.string());
 

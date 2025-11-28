@@ -20,8 +20,11 @@
 
   const query: ExecutionsQuery = $state({});
 
-  const executionsQuery = $derived(commandExecutionsQuery(id, query));
-  const executions = $derived($executionsQuery.data ?? []);
+  const executionsQuery = commandExecutionsQuery(() => ({
+    commandId: id,
+    query,
+  }));
+  const executions = $derived(executionsQuery.data ?? []);
 
   onMount(() => {
     onRefresh();
@@ -36,7 +39,7 @@
   }
 </script>
 
-{#if $executionsQuery.isPending}
+{#if executionsQuery.isPending}
   <div class="skeleton" style="width: 90%; height: 1.5rem; padding: 1rem"></div>
 {/if}
 

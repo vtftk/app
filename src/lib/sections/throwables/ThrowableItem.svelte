@@ -52,7 +52,7 @@
       return;
     }
 
-    const deletePromise = $deleteItem.mutateAsync(config.id);
+    const deletePromise = deleteItem.mutateAsync(config.id);
 
     toast.promise(deletePromise, {
       loading: "Deleting item...",
@@ -81,7 +81,7 @@
     <SettingsIcon /> View
   </LinkButton>
 
-  <Button onclick={onDelete} disabled={$deleteItem.isPending}>
+  <Button onclick={onDelete} disabled={deleteItem.isPending}>
     <DeleteIcon /> Delete
   </Button>
 {/snippet}

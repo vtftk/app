@@ -28,7 +28,7 @@
 
   let search = $state("");
 
-  const events = $derived($eventsQuery.data ?? []);
+  const events = $derived(eventsQuery.data ?? []);
   const selection = createSelection(() => events);
   const filteredEvents = $derived(filterNameSearch(events, search));
 

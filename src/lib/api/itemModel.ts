@@ -114,22 +114,25 @@ export async function bulkAppendItemSounds(
 
 // -----------------------------------------------------
 
-export function createItemQuery(id: ItemId) {
-  return createQuery({
-    queryKey: createItemKey(id),
-    queryFn: () => getItemById(id),
+export function createItemQuery(idParam: () => ItemId) {
+  return createQuery(() => {
+    const id = idParam();
+    return {
+      queryKey: createItemKey(id),
+      queryFn: () => getItemById(id),
+    };
   });
 }
 
 export function createItemsQuery() {
-  return createQuery({
+  return createQuery(() => ({
     queryKey: ITEMS_KEY,
     queryFn: () => invoke<Item[]>("get_items"),
-  });
+  }));
 }
 
 export function deleteItemMutation() {
-  return createMutation<void, Error, ItemId>({
-    mutationFn: deleteItem,
-  });
+  return createMutation<void, Error, ItemId>(() => ({
+    mutationFn: (itemId) => deleteItem(itemId),
+  }));
 }

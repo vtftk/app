@@ -81,15 +81,19 @@ export async function updateSoundOrder(update: UpdateOrdering[]) {
 // -----------------------------------------------------
 
 export function createSoundsQuery() {
-  return createQuery({
+  return createQuery(() => ({
     queryKey: SOUNDS_KEY,
     queryFn: () => invoke<Sound[]>("get_sounds"),
-  });
+  }));
 }
 
-export function createSoundQuery(id: SoundId) {
-  return createQuery({
-    queryKey: createSoundKey(id),
-    queryFn: () => getSoundById(id),
+export function createSoundQuery(idParam: () => SoundId) {
+  return createQuery(() => {
+    const id = idParam();
+
+    return {
+      queryKey: createSoundKey(id),
+      queryFn: () => getSoundById(id),
+    };
   });
 }

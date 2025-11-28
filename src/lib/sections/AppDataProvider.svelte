@@ -16,11 +16,11 @@
 
   const runtimeAppData = createRuntimeAppDataQuery();
   const runtimeAppDataStore: RuntimeAppData | undefined = $derived(
-    $runtimeAppData.data,
+    runtimeAppData.data,
   );
 
   const appData = createAppDataQuery();
-  const appDataStore: AppData | undefined = $derived($appData.data);
+  const appDataStore: AppData | undefined = $derived(appData.data);
 
   setContext(APP_CONTEXT_KEY, {
     // Values within the context are guaranteed to be defined when the context is used
@@ -34,7 +34,7 @@
   });
 </script>
 
-{#if $runtimeAppData.isLoading || $appData.isLoading}
+{#if runtimeAppData.isLoading || appData.isLoading}
   <div class="skeleton-list">
     <div class="skeleton" style="width: 90%; height: 1.5rem;"></div>
     <div class="skeleton" style="width: 70%; height: 1rem;"></div>

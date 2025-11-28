@@ -6,6 +6,7 @@
 
   type Props = {
     icon: Component<SvelteHTMLElements["svg"]>;
+    /** Expects resolve() to be used before passing href in */
     href: string;
     title: string;
     text: string;
@@ -13,6 +14,8 @@
 
   const { icon: Icon, href, title, text }: Props = $props();
 </script>
+
+<!-- eslint-disable svelte/no-navigation-without-resolve -->
 
 <a
   {href}

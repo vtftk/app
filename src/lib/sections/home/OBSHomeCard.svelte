@@ -21,7 +21,7 @@
    * Handler for clicking the "Copy Link" button to copy the overlay URL
    */
   function onCopyOverlay() {
-    const overlayURL: string | undefined = $overlayURLQuery.data;
+    const overlayURL: string | undefined = overlayURLQuery.data;
 
     if (overlayURL === undefined) return;
 
@@ -60,10 +60,10 @@
         </span>
       </h2>
 
-      {#if $overlayURLQuery.data}
+      {#if overlayURLQuery.data}
         <div class="actions">
           <Button onclick={onCopyOverlay}>Copy Link</Button>
-          <p class="url">{$overlayURLQuery.data}</p>
+          <p class="url">{overlayURLQuery.data}</p>
         </div>
       {/if}
     </div>
@@ -71,8 +71,8 @@
     <StatusIndicator
       status={runtimeAppData.active_overlay_count > 0 ? "green" : "red"}
     >
-      {runtimeAppData.active_overlay_count}</StatusIndicator
-    >
+      {runtimeAppData.active_overlay_count}
+    </StatusIndicator>
   </div>
 </Card>
 

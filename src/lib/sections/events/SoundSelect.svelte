@@ -26,7 +26,7 @@
   const soundsQuery = createSoundsQuery();
 
   const items = $derived(
-    ($soundsQuery.data ?? []).map((sound) => ({
+    (soundsQuery.data ?? []).map((sound) => ({
       value: sound.id,
       label: sound.name,
     })),
@@ -35,7 +35,7 @@
   type Option = (typeof items)[0];
 </script>
 
-{#if $soundsQuery.isLoading}
+{#if soundsQuery.isLoading}
   <div class="skeleton" style="width: 90%; height: 1.5rem; padding: 1rem"></div>
 {/if}
 

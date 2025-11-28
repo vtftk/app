@@ -4,27 +4,27 @@ import libraryDefinition from "../../../../scripting/dist/runtime.d.ts?raw";
 import builtinLibraryDefinition from "../../../../scripting/types/builtin.d.ts?raw";
 
 const compilerOptions =
-  monaco.languages.typescript.javascriptDefaults.getCompilerOptions();
+  monaco.typescript.javascriptDefaults.getCompilerOptions();
 
-monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
+monaco.typescript.javascriptDefaults.setCompilerOptions({
   ...compilerOptions,
   noLib: true,
 });
 
 // Built-in JS runtime library definitions (ES6 etc etc)
-monaco.languages.typescript.javascriptDefaults.addExtraLib(
+monaco.typescript.javascriptDefaults.addExtraLib(
   builtinLibraryDefinition,
   "file:///lib.d.ts",
 );
 
 // VTFTK scripting library
-monaco.languages.typescript.javascriptDefaults.addExtraLib(
+monaco.typescript.javascriptDefaults.addExtraLib(
   libraryDefinition,
   "file:///global.d.ts",
 );
 
 // Disable errors about top level await
-monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+monaco.typescript.javascriptDefaults.setDiagnosticsOptions({
   noSemanticValidation: false,
   noSyntaxValidation: false,
 });

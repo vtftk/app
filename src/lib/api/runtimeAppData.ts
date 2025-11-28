@@ -38,24 +38,24 @@ export function createRuntimeAppDataQuery(): CreateQueryResult<
   RuntimeAppData,
   Error
 > {
-  return createQuery({
+  return createQuery(() => ({
     queryKey: RUNTIME_APP_DATA_KEY,
     queryFn: () => invoke<RuntimeAppData>("get_runtime_app_data"),
-  });
+  }));
 }
 
 /**
  * Create a query to fetch the app data
  */
 export function createAppDataQuery(): CreateQueryResult<AppData, Error> {
-  return createQuery({
+  return createQuery(() => ({
     queryKey: APP_DATA_KEY,
     queryFn: () => invoke<AppData>("get_app_data"),
-  });
+  }));
 }
 
 export function createAppDateMutation() {
-  return createMutation<boolean, Error, AppData>({
+  return createMutation<boolean, Error, AppData>(() => ({
     mutationFn: (appData) => invoke<boolean>("set_app_data", { appData }),
     onMutate: async (appData) => {
       queryClient.cancelQueries({ queryKey: APP_DATA_KEY });
@@ -65,17 +65,17 @@ export function createAppDateMutation() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: APP_DATA_KEY });
     },
-  });
+  }));
 }
 
 /**
  * Create a query to load the overlay URL
  */
 export function createOverlayURLQuery() {
-  return createQuery({
+  return createQuery(() => ({
     queryKey: ["overlay-url"],
     queryFn: () => invoke<string>("get_overlay_url"),
-  });
+  }));
 }
 
 export function getTwitchOAuthURI() {

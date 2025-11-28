@@ -8,17 +8,17 @@
 
   const { params }: PageProps = $props();
 
-  const soundQuery = $derived(createSoundQuery(params.id));
+  const soundQuery = createSoundQuery(() => params.id);
 </script>
 
-{#if $soundQuery.isLoading}
+{#if soundQuery.isLoading}
   <div class="skeleton-list">
     <div class="skeleton" style="width: 90%; height: 1.5rem;"></div>
     <div class="skeleton" style="width: 70%; height: 1rem;"></div>
     <div class="skeleton" style="width: 80%; height: 1rem;"></div>
   </div>
-{:else if $soundQuery.data}
-  <SoundForm existing={$soundQuery.data} />
+{:else if soundQuery.data}
+  <SoundForm existing={soundQuery.data} />
 {:else}
   {#snippet actions()}
     <a type="button" href={resolve("/sounds")}>Back</a>

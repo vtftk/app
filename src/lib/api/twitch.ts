@@ -18,10 +18,10 @@ export function createGetRedeemsList(): CreateQueryResult<
   CustomReward[],
   Error
 > {
-  return createQuery({
+  return createQuery(() => ({
     queryKey: GET_REDEEMS_LIST_KEY,
     queryFn: () => invoke<CustomReward[]>("get_redeems_list"),
-  });
+  }));
 }
 
 export async function refreshRedeemsList() {
@@ -38,10 +38,10 @@ export function createIsAuthenticatedQuery(): CreateQueryResult<
   boolean,
   Error
 > {
-  return createQuery({
+  return createQuery(() => ({
     queryKey: IS_AUTHENTICATED_KEY,
     queryFn: () => invoke<boolean>("is_authenticated"),
-  });
+  }));
 }
 
 export function logout() {

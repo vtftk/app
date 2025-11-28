@@ -27,7 +27,7 @@
 
   let search = $state("");
 
-  const sounds = $derived($soundsQuery.data ?? []);
+  const sounds = $derived(soundsQuery.data ?? []);
   const selection = createSelection(() => sounds);
   const filteredSounds: Sound[] = $derived(filterNameSearch(sounds, search));
 

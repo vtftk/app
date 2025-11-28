@@ -9,17 +9,17 @@
 
   const { params }: PageProps = $props();
 
-  const itemQuery = $derived(createItemQuery(params.id));
+  const itemQuery = createItemQuery(() => params.id);
 </script>
 
-{#if $itemQuery.isLoading}
+{#if itemQuery.isLoading}
   <div class="skeleton-list">
     <div class="skeleton" style="width: 90%; height: 1.5rem;"></div>
     <div class="skeleton" style="width: 70%; height: 1rem;"></div>
     <div class="skeleton" style="width: 80%; height: 1rem;"></div>
   </div>
-{:else if $itemQuery.data}
-  <ThrowableForm existing={$itemQuery.data} />
+{:else if itemQuery.data}
+  <ThrowableForm existing={itemQuery.data} />
 {:else}
   {#snippet actions()}
     <LinkButton href={resolve("/throwables")}>Back</LinkButton>

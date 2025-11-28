@@ -11,7 +11,7 @@
 
   // Model needs to be calibrated if not available here
   const modelCalibrated = $derived(
-    isModelCalibrated($modelDataQuery.data ?? [], runtimeAppData.model_id),
+    isModelCalibrated(modelDataQuery.data ?? [], runtimeAppData.model_id),
   );
 </script>
 
@@ -40,7 +40,7 @@
     <div>Twitch</div>
     <div
       class="status-indicator"
-      data-status={$isAuthenticated.data ? "green" : "red"}
+      data-status={isAuthenticated.data ? "green" : "red"}
     ></div>
   </div>
 </div>

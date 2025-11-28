@@ -24,10 +24,10 @@ export enum CalibrationStep {
 const CALIBRATION_DATA_KEY = ["calibration-data"];
 
 export function createModelDataQuery() {
-  return createQuery({
+  return createQuery(() => ({
     queryKey: CALIBRATION_DATA_KEY,
     queryFn: () => invoke<ModelData[]>("get_calibration_data"),
-  });
+  }));
 }
 
 // Handle calibration data change

@@ -16,11 +16,11 @@
 
   // Model needs to be calibrated if not available here
   const modelCalibrated = $derived(
-    isModelCalibrated($modelDataQuery.data ?? [], runtimeAppData.model_id),
+    isModelCalibrated(modelDataQuery.data ?? [], runtimeAppData.model_id),
   );
 
   const isCalibrationLoading = new Debounced(
-    () => $modelDataQuery.isLoading,
+    () => modelDataQuery.isLoading,
     300,
   );
 </script>

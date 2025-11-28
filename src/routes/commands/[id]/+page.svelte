@@ -8,17 +8,17 @@
 
   const { params }: PageProps = $props();
 
-  const commandQuery = $derived(createCommandQuery(params.id));
+  const commandQuery = createCommandQuery(() => params.id);
 </script>
 
-{#if $commandQuery.isLoading}
+{#if commandQuery.isLoading}
   <div class="skeleton-list">
     <div class="skeleton" style="width: 90%; height: 1.5rem;"></div>
     <div class="skeleton" style="width: 70%; height: 1rem;"></div>
     <div class="skeleton" style="width: 80%; height: 1rem;"></div>
   </div>
-{:else if $commandQuery.data}
-  <CommandForm existing={$commandQuery.data} />
+{:else if commandQuery.data}
+  <CommandForm existing={commandQuery.data} />
 {:else}
   {#snippet actions()}
     <a type="button" href={resolve("/commands")}>Back</a>
@@ -28,7 +28,7 @@
     title="Command Not Found"
     description="Unknown command"
     {actions}
-  ></PageLayoutList>
+  />
 {/if}
 
 <style>

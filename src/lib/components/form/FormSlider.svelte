@@ -13,9 +13,10 @@
     value: number;
     showTicks?: boolean;
     oninput?: (value: number) => void;
+    step?: number;
   } & Omit<
     WithoutChildren<Omit<BitsSlider.RootProps & { type: "single" }, "type">>,
-    "value" | "onValueChange"
+    "value" | "onValueChange" | "step"
   >;
 
   let {

@@ -46,7 +46,7 @@
   const appData = $derived(appContext.appData);
 
   const soundsQuery = createSoundsQuery();
-  const sounds = $derived(filterNameSearch($soundsQuery.data ?? [], search));
+  const sounds = $derived(filterNameSearch(soundsQuery.data ?? [], search));
 
   const onSelectSound = (sound: Sound) => {
     if (selected.includes(sound.id)) {

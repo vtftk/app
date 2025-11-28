@@ -174,30 +174,46 @@ export async function deleteEventLogs(eventId: EventId, logIds: LogId[]) {
 
 // -----------------------------------------------------
 
-export function eventExecutionsQuery(eventId: EventId, query: ExecutionsQuery) {
-  return createQuery({
-    queryKey: createEventExecutionsKey(eventId, query),
-    queryFn: () => getEventExecutions(eventId, query),
+export function eventExecutionsQuery(
+  params: () => { eventId: EventId; query: ExecutionsQuery },
+) {
+  return createQuery(() => {
+    const { eventId, query } = params();
+
+    return {
+      queryKey: createEventExecutionsKey(eventId, query),
+      queryFn: () => getEventExecutions(eventId, query),
+    };
   });
 }
 
 export function createEventsQuery() {
-  return createQuery({
+  return createQuery(() => ({
     queryKey: EVENTS_KEY,
     queryFn: getEvents,
+  }));
+}
+
+export function createEventQuery(idParam: () => EventId) {
+  return createQuery(() => {
+    const id = idParam();
+
+    return {
+      queryKey: createEventKey(id),
+      queryFn: () => getEventById(id),
+    };
   });
 }
 
-export function createEventQuery(id: EventId) {
-  return createQuery({
-    queryKey: createEventKey(id),
-    queryFn: () => getEventById(id),
-  });
-}
+export function eventLogsQuery(
+  params: () => { eventId: EventId; query: LogsQuery },
+) {
+  return createQuery(() => {
+    const { eventId, query } = params();
 
-export function eventLogsQuery(eventId: EventId, query: LogsQuery) {
-  return createQuery({
-    queryKey: createEventLogsKey(eventId, query),
-    queryFn: () => getEventLogs(eventId, query),
+    return {
+      queryKey: createEventLogsKey(eventId, query),
+      queryFn: () => getEventLogs(eventId, query),
+    };
   });
 }

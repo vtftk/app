@@ -186,32 +186,44 @@ export async function deleteCommandExecutions(
 // -----------------------------------------------------
 
 export function createCommandsQuery() {
-  return createQuery({
+  return createQuery(() => ({
     queryKey: COMMANDS_KEY,
     queryFn: getCommands,
+  }));
+}
+
+export function createCommandQuery(idParam: () => CommandId) {
+  return createQuery(() => {
+    const id = idParam();
+    return {
+      queryKey: createCommandKey(id),
+      queryFn: () => getCommandById(id),
+    };
   });
 }
 
-export function createCommandQuery(id: CommandId) {
-  return createQuery({
-    queryKey: createCommandKey(id),
-    queryFn: () => getCommandById(id),
-  });
-}
+export function commandLogsQuery(
+  params: () => { commandId: CommandId; query: LogsQuery },
+) {
+  return createQuery(() => {
+    const { commandId, query } = params();
 
-export function commandLogsQuery(commandId: CommandId, query: LogsQuery) {
-  return createQuery({
-    queryKey: createCommandLogsKey(commandId, query),
-    queryFn: () => getCommandLogs(commandId, query),
+    return {
+      queryKey: createCommandLogsKey(commandId, query),
+      queryFn: () => getCommandLogs(commandId, query),
+    };
   });
 }
 
 export function commandExecutionsQuery(
-  commandId: CommandId,
-  query: ExecutionsQuery,
+  params: () => { commandId: CommandId; query: ExecutionsQuery },
 ) {
-  return createQuery({
-    queryKey: createCommandExecutionsKey(commandId, query),
-    queryFn: () => getCommandExecutions(commandId, query),
+  return createQuery(() => {
+    const { commandId, query } = params();
+
+    return {
+      queryKey: createCommandExecutionsKey(commandId, query),
+      queryFn: () => getCommandExecutions(commandId, query),
+    };
   });
 }

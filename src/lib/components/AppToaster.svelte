@@ -1,6 +1,5 @@
 <script lang="ts">
   import { Toaster } from "svelte-sonner";
-  // import "$lib/styles/toaster.css";
 </script>
 
 <Toaster

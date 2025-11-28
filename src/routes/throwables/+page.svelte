@@ -38,7 +38,7 @@
 
   let search = $state("");
 
-  const items = $derived($itemsQuery.data ?? []);
+  const items = $derived(itemsQuery.data ?? []);
   const selection = createSelection(() => items);
   const filteredItems = $derived(filterNameSearch(items, search));
 

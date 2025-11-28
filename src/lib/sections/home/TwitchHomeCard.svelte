@@ -16,7 +16,7 @@
   const isAuthenticated = createIsAuthenticatedQuery();
 
   // Consistent loading times to prevent flickering
-  const isTwitchLoading = new Debounced(() => $isAuthenticated.isLoading, 300);
+  const isTwitchLoading = new Debounced(() => isAuthenticated.isLoading, 300);
 
   /**
    * Handle logging out from Twitch
@@ -32,11 +32,11 @@
   }
 
   const status: StatusColor = $derived.by(() => {
-    if ($isAuthenticated.isLoading) {
+    if (isAuthenticated.isLoading) {
       return "orange";
     }
 
-    if ($isAuthenticated.data) {
+    if (isAuthenticated.data) {
       return "green";
     }
 
@@ -64,7 +64,7 @@
           Twitch
 
           <span class="labels">
-            {#if $isAuthenticated.data}
+            {#if isAuthenticated.data}
               <Label color="green">Connected</Label>
             {:else}
               <Label color="red">Not Connected</Label>
@@ -72,7 +72,7 @@
           </span>
         </h2>
 
-        {#if $isAuthenticated.data}
+        {#if isAuthenticated.data}
           <div class="actions">
             <Button onclick={onLogoutTwitch}>Logout</Button>
           </div>

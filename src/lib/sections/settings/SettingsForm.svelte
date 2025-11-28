@@ -170,7 +170,7 @@
   async function save(values: Schema) {
     const { throwables, model, sounds, vtube_studio, main, physics } = values;
 
-    await $appDataMutation.mutateAsync({
+    await appDataMutation.mutateAsync({
       ...appData,
 
       throwables_config: {

@@ -9,17 +9,17 @@
 
   const { params }: PageProps = $props();
 
-  const eventQuery = $derived(createEventQuery(params.id));
+  const eventQuery = createEventQuery(() => params.id);
 </script>
 
-{#if $eventQuery.isLoading}
+{#if eventQuery.isLoading}
   <div class="skeleton-list">
     <div class="skeleton" style="width: 90%; height: 1.5rem;"></div>
     <div class="skeleton" style="width: 70%; height: 1rem;"></div>
     <div class="skeleton" style="width: 80%; height: 1rem;"></div>
   </div>
-{:else if $eventQuery.data}
-  <EventForm existing={$eventQuery.data} />
+{:else if eventQuery.data}
+  <EventForm existing={eventQuery.data} />
 {:else}
   {#snippet actions()}
     <LinkButton href={resolve("/events")}>Back</LinkButton>
