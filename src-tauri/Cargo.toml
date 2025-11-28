@@ -100,29 +100,6 @@ features = [
     "json",
 ]
 
-[dependencies.sea-query]
-version = "0.32.1"
-features = [
-    "derive",
-    "thread-safe",
-    "backend-sqlite",
-    "with-chrono",
-    "with-json",
-    "with-uuid",
-]
-
-[dependencies.sea-query-binder]
-version = "0.7.0"
-features = [
-    "sqlx-sqlite",
-    "with-chrono",
-    "with-json",
-    "with-uuid",
-    "runtime-tokio-rustls",
-]
-
-
-
 [profile.dev]
 incremental = true # Compile your binary in smaller steps.
 
