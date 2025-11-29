@@ -12,6 +12,7 @@ use tauri::{
     async_runtime::{block_on, spawn},
     App, AppHandle, Manager, RunEvent,
 };
+use tauri_plugin_dialog::DialogExt;
 use tokio::sync::mpsc;
 use twitch::manager::Twitch;
 
@@ -221,16 +222,16 @@ fn setup(app: &mut App) -> Result<(), Box<dyn Error>> {
             error!("failed to bind http server socket: {cause:?}");
 
             // Show error dialog about the failed port binding
-            rfd::MessageDialog::new()
-                .set_title("Failed to start")
-                .set_description(format!(
-                    "The port {} required to run VTFTK is currently in use, please change your port in settings 
+            app.dialog()
+                .message(format!(
+                    "The port {} required to run VTFTK is currently in use, please change your port in settings
                     or most features of VTFTK will be non-functional",
                     http_port
                 ))
-                .set_level(rfd::MessageLevel::Error)
-                .set_buttons(rfd::MessageButtons::Ok)
-                .show();
+                .title("Failed to start")
+                .kind(tauri_plugin_dialog::MessageDialogKind::Error)
+                .buttons(tauri_plugin_dialog::MessageDialogButtons::Ok)
+                .show(|_| {});
         }
     };
 

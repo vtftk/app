@@ -25,8 +25,8 @@ pub fn router() -> Router {
                 .post(calibration::handle_calibration_progress),
         )
         // Asset endpoints (Bonks, sounds, defaults, etc...)
-        .route("/content/:folder/:name", get(data::get_content_file))
-        .route("/defaults/:folder/:name", get(data::get_defaults_file))
+        .route("/content/{folder}/{name}", get(data::get_content_file))
+        .route("/defaults/{folder}/{name}", get(data::get_defaults_file))
         // Overlay endpoints
         .route("/overlay", get(overlay::page))
         .route("/overlay/config", get(overlay::get_overlay_config))

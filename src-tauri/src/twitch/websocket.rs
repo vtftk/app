@@ -9,7 +9,6 @@ use crate::events::{
     TwitchEventShoutoutReceive, TwitchEventSub,
 };
 use anyhow::Context;
-use axum::async_trait;
 use futures::{
     future::{try_join_all, BoxFuture},
     StreamExt,
@@ -510,7 +509,6 @@ pub trait EventSubTrait: Send + 'static {
     ) -> BoxFuture<'a, anyhow::Result<()>>;
 }
 
-#[async_trait]
 impl<T: EventSubscription + Send + 'static> EventSubTrait for EventSub<T> {
     fn subscribe<'a>(
         self: Box<Self>,

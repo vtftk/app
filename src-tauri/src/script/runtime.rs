@@ -17,6 +17,7 @@ use crate::{
 };
 use anyhow::Context;
 use deno_core::{
+    scope,
     serde_v8::to_v8,
     v8::{self, Global, Local},
     JsRuntime, OpState, PollEventLoopOptions, RuntimeOptions,
@@ -343,7 +344,7 @@ fn execute_command(
     cmd_ctx: CommandContext,
 ) -> anyhow::Result<v8::Global<v8::Value>> {
     // Get the handle scope
-    let scope = &mut runtime.handle_scope();
+    scope!(scope, runtime);
 
     // Wrap code in async function to allow await
     let code = format!("async (ctx) => {{ {script} }}");
@@ -404,7 +405,7 @@ fn execute_script(
     data: EventData,
 ) -> anyhow::Result<v8::Global<v8::Value>> {
     // Get the handle scope
-    let scope = &mut runtime.handle_scope();
+    scope!(scope, runtime);
 
     // Wrap code in async function to allow await
     let code = format!("async (event) => {{ {script} }}");

@@ -1,7 +1,7 @@
 [package]
 name = "vtftk"
 version = "0.2.1"
-description = "A Tauri App"
+description = "App for VTubers to create interactive experiences with their viewers"
 edition = "2021"
 license = "MIT"
 authors = ["Jacobtread <jacobtread@gmail.com>"]
@@ -12,18 +12,20 @@ name = "vtftk_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2.5.2", features = [] }
 # Deno core for compiling runtime snapshot
-deno_core = "0.351.0"
+deno_core = "0.371.0"
 
 [dependencies]
 # Tauri for frontend UI and its plugins
-tauri = { version = "2", features = ["tray-icon"] }
-tauri-plugin-single-instance = "2.2.0"
-tauri-plugin-updater = "2"
+tauri = { version = "2.5.2", features = ["tray-icon"] }
+tauri-plugin-single-instance = "2.3.6"
+tauri-plugin-updater = "2.9.0"
+tauri-plugin-dialog = "2.4.2"
+tauri-plugin-opener = "2.5.2"
 
 # Twitch API for working with twitch
-twitch_api = { version = "0.7.0", features = [
+twitch_api = { version = "0.7.2", features = [
     "helix",
     "eventsub",
     "all",
@@ -31,65 +33,63 @@ twitch_api = { version = "0.7.0", features = [
 ] }
 
 # Websocket client for twitch event sub
-tokio-tungstenite = { version = "0.24.0", features = [
+tokio-tungstenite = { version = "0.28.0", features = [
     "rustls-tls-native-roots",
 ] }
 
 # Serialization and JSON
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-serde_with = "3.12.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+serde_with = "3.16.1"
 
 # HTTP
-reqwest = { version = "0.12.9", default-features = false, features = [
+reqwest = { version = "0.12.24", default-features = false, features = [
     "charset",
     "http2",
     "rustls-tls",
 ] }
 
 # HTTP server
-axum = { version = "0.7.9", features = ["ws", "macros"] }
-tower-http = { version = "0.6.2", features = ["cors"] }
+axum = { version = "0.8.7", features = ["ws", "macros"] }
+tower-http = { version = "0.6.7", features = ["cors"] }
 
 # Error handling
-anyhow = "1"
-thiserror = "2"
+anyhow = "1.0.100"
+thiserror = "2.0.17"
 
 # Asynchronous runtime and utilities
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.48.0", features = ["full"] }
+tokio-stream = { version = "0.1.17", features = ["full"] }
 futures = "0.3.31"
-tokio-stream = { version = "0.1.16", features = ["full"] }
 
 # UUID
-uuid = { version = "1", features = ["v4", "serde"] }
+uuid = { version = "1.18.1", features = ["v4", "serde"] }
 
 # Mime type guessing for file serving
-mime_guess = "2"
+mime_guess = "2.0.5"
 
 # Logging
-log = "0.4"
-env_logger = "0.11"
+log = "0.4.28"
+env_logger = "0.11.8"
 
 # JavaScript runtime
-deno_core = "0.351.0"
-deno_error = "0.6.1"
+deno_core = "0.371.0"
+deno_error = "0.7.1"
 
 # Date & Time
-chrono = { version = "0.4.39", features = ["serde"] }
-async-trait = "0.1.86"
-strum = { version = "0.27.1", features = ["derive"] }
-itertools = "0.14.0"
-parking_lot = "0.12.3"
-tauri-plugin-dialog = "2"
-tauri-plugin-opener = "2"
+chrono = { version = "0.4.42", features = ["serde"] }
 
-# File dialogs for file picker prompts
-rfd = { version = "0.15.3", default-features = false, features = [
-    "tokio",
-] }
+# String enums
+strum = { version = "0.27.2", features = ["derive"] }
+
+# Iterator utils
+itertools = "0.14.0"
+
+# Fast blocking locks
+parking_lot = "0.12.5"
 
 [dependencies.sqlx]
-version = "0.8.2"
+version = "0.8.6"
 features = [
     "runtime-tokio",
     "tls-rustls",
