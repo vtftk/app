@@ -4,9 +4,9 @@
 
 use anyhow::Context;
 use tauri::{
+    App, AppHandle, Manager,
     menu::{IconMenuItem, Menu, MenuItem},
     tray::TrayIconBuilder,
-    App, AppHandle, Manager,
 };
 
 #[cfg(not(debug_assertions))]
@@ -47,15 +47,18 @@ pub fn create_tray_menu(app: &mut App) -> anyhow::Result<()> {
 /// to bring the app back into focus or re-create the window
 /// if it has been closed
 fn handle_open_clicked(app: &AppHandle) -> anyhow::Result<()> {
-    if let Some((_name, window)) = app.webview_windows().iter().next() {
-        // Show existing window if none are present
-        window.show().context("failed to show window")?;
+    match app.webview_windows().iter().next() {
+        Some((_name, window)) => {
+            // Show existing window if none are present
+            window.show().context("failed to show window")?;
 
-        // Focus the window
-        window.set_focus().context("failed to focus window")?;
-    } else {
-        // Recreate the web view from the existing config
-        recreate_window(app).context("failed to recreate window")?;
+            // Focus the window
+            window.set_focus().context("failed to focus window")?;
+        }
+        _ => {
+            // Recreate the web view from the existing config
+            recreate_window(app).context("failed to recreate window")?;
+        }
     }
 
     Ok(())

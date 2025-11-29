@@ -2,7 +2,7 @@
 name = "vtftk"
 version = "0.2.1"
 description = "App for VTubers to create interactive experiences with their viewers"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 authors = ["Jacobtread <jacobtread@gmail.com>"]
 repository = "https://github.com/vtftk/app"
