@@ -287,10 +287,11 @@
     <SoundPicker
       description="Choose which sounds should play when this item impacts"
       selected={$data.impactSoundIds}
-      onChangeSelected={(soundIds) => {
+      onChangeSelected={(sounds) => {
+        console.log(sounds);
         setFields(
           "impactSoundIds",
-          soundIds.map((sound) => sound.id),
+          sounds.map((sound) => sound.id),
           true,
         );
       }}
@@ -329,10 +330,10 @@
     <SoundPicker
       description="Choose which sounds can play for the windup (Randomly chosen from the selection)"
       selected={$data.windupSoundIds}
-      onChangeSelected={(soundIds) => {
+      onChangeSelected={(sounds) => {
         setFields(
           "windupSoundIds",
-          soundIds.map((sound) => sound.id),
+          sounds.map((sound) => sound.id),
           true,
         );
       }}

@@ -339,7 +339,7 @@ impl ItemModel {
 
     /// Delete sounds of a specific type for a specific item
     async fn delete_sounds_by_type(&self, db: &DbPool, sound_type: SoundType) -> DbResult<()> {
-        sqlx::query(r#"DELETE FROM "items_sounds" WHERE "item_id" = ? OR "sound_type" = ?"#)
+        sqlx::query(r#"DELETE FROM "items_sounds" WHERE "item_id" = ? AND "sound_type" = ?"#)
             .bind(self.id)
             .bind(sound_type)
             .execute(db)
@@ -363,7 +363,7 @@ impl ItemModel {
         let values_sets = std::iter::repeat_n("(?,?,?)", sound_ids.len()).join(",");
         let sql = format!(
             r#"
-            INSERT INTO "items_sounds" ("item_id", "sound_id", "sound_type") 
+            INSERT INTO "items_sounds" ("item_id", "sound_id", "sound_type")
             VALUES {values_sets}
             ON CONFLICT("item_id", "sound_id", "sound_type") DO NOTHING
             "#
