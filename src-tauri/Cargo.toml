@@ -1,6 +1,6 @@
 [package]
 name = "vtftk"
-version = "0.2.1"
+version = "0.2.2"
 description = "App for VTubers to create interactive experiences with their viewers"
 edition = "2024"
 license = "MIT"
