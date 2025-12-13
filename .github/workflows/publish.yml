@@ -7,6 +7,9 @@ on:
 
 # This workflow will trigger on each push to the `release` branch to create or update a GitHub release, build your app, and upload the artifacts to the release.
 
+env:
+  NODE_OPTIONS: --max_old_space_size=4096
+
 jobs:
   publish-tauri:
     permissions:
