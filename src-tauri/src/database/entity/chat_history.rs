@@ -67,7 +67,7 @@ impl ChatHistoryModel {
     ) -> DbResult<u32> {
         let result: (u32,) = if let Some(exclude_id) = exclude_id {
             sqlx::query_as(
-                r#"SELECT * FROM "chat_history" WHERE "created_at" > ? AND "user_id" != ?"#,
+                r#"SELECT COUNT(*) FROM "chat_history" WHERE "created_at" > ? AND "user_id" != ?"#,
             )
             .bind(start_date)
             .bind(exclude_id.as_str())
@@ -97,21 +97,453 @@ impl ChatHistoryModel {
 
 #[cfg(test)]
 mod test {
-    #[tokio::test]
-    async fn test_create() {}
+    use chrono::{Days, Utc};
+    use uuid::Uuid;
+
+    use crate::database::{
+        entity::chat_history::{ChatHistoryModel, CreateChatHistory},
+        mock_database,
+    };
 
     #[tokio::test]
-    async fn test_estimate_size() {}
+    async fn test_create() {
+        let db = mock_database().await;
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: Utc::now(),
+            },
+        )
+        .await
+        .unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_2".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: Utc::now(),
+            },
+        )
+        .await
+        .unwrap();
+    }
 
     #[tokio::test]
-    async fn test_estimate_size_empty() {}
+    async fn test_estimate_size() {
+        let db = mock_database().await;
+        let message_1 = "a".repeat(50).to_string();
+        let message_2 = "b".repeat(50).to_string();
+        let message_size = message_1.len() + message_2.len();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test".to_string(),
+                message: message_1.to_string(),
+                cheer: None,
+                created_at: Utc::now(),
+            },
+        )
+        .await
+        .unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_2".to_string(),
+                message: message_2.to_string(),
+                cheer: None,
+                created_at: Utc::now(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let est_size = ChatHistoryModel::estimate_size(&db).await.unwrap();
+        assert_eq!(est_size as usize, message_size);
+    }
 
     #[tokio::test]
-    async fn test_count_since() {}
+    async fn test_estimate_size_empty() {
+        let db = mock_database().await;
+        let est_size = ChatHistoryModel::estimate_size(&db).await.unwrap();
+        assert_eq!(est_size, 0);
+    }
 
     #[tokio::test]
-    async fn test_count_since_empty() {}
+    async fn test_count_since() {
+        let db = mock_database().await;
+
+        let first_time = Utc::now();
+        let second_time = Utc::now().checked_add_days(Days::new(50)).unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_2".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: first_time,
+            },
+        )
+        .await
+        .unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_2".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: first_time,
+            },
+        )
+        .await
+        .unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_2".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: second_time,
+            },
+        )
+        .await
+        .unwrap();
+
+        let count = ChatHistoryModel::count_since(
+            &db,
+            second_time.checked_sub_days(Days::new(1)).unwrap(),
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(count, 1);
+    }
 
     #[tokio::test]
-    async fn test_delete_before() {}
+    async fn test_count_since_excluding() {
+        let db = mock_database().await;
+
+        let first_time = Utc::now();
+        let second_time = Utc::now().checked_add_days(Days::new(50)).unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_2".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: first_time,
+            },
+        )
+        .await
+        .unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_2".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: first_time,
+            },
+        )
+        .await
+        .unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_2".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: second_time,
+            },
+        )
+        .await
+        .unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_3".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: second_time,
+            },
+        )
+        .await
+        .unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_3".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: second_time,
+            },
+        )
+        .await
+        .unwrap();
+
+        let count = ChatHistoryModel::count_since(
+            &db,
+            second_time.checked_sub_days(Days::new(1)).unwrap(),
+            Some("test_2".into()),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(count, 2);
+    }
+
+    #[tokio::test]
+    async fn test_count_since_empty() {
+        let db = mock_database().await;
+
+        let first_time = Utc::now();
+        let second_time = Utc::now().checked_add_days(Days::new(50)).unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_2".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: first_time,
+            },
+        )
+        .await
+        .unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_2".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: first_time,
+            },
+        )
+        .await
+        .unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_2".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: second_time,
+            },
+        )
+        .await
+        .unwrap();
+
+        let count = ChatHistoryModel::count_since(
+            &db,
+            second_time.checked_add_days(Days::new(1)).unwrap(),
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_count_since_empty_excluding() {
+        let db = mock_database().await;
+
+        let first_time = Utc::now();
+        let second_time = Utc::now().checked_add_days(Days::new(50)).unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_2".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: first_time,
+            },
+        )
+        .await
+        .unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_2".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: first_time,
+            },
+        )
+        .await
+        .unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_2".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: second_time,
+            },
+        )
+        .await
+        .unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_2".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: second_time,
+            },
+        )
+        .await
+        .unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_2".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: second_time,
+            },
+        )
+        .await
+        .unwrap();
+
+        let count = ChatHistoryModel::count_since(
+            &db,
+            second_time.checked_sub_days(Days::new(1)).unwrap(),
+            Some("test_2".into()),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_delete_before() {
+        let db = mock_database().await;
+
+        let first_time = Utc::now();
+        let second_time = Utc::now().checked_add_days(Days::new(50)).unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_2".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: first_time,
+            },
+        )
+        .await
+        .unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_2".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: first_time,
+            },
+        )
+        .await
+        .unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_2".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: second_time,
+            },
+        )
+        .await
+        .unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_2".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: second_time,
+            },
+        )
+        .await
+        .unwrap();
+
+        ChatHistoryModel::create(
+            &db,
+            CreateChatHistory {
+                id: Uuid::new_v4(),
+                user_id: "test_2".to_string(),
+                message: "test".to_string(),
+                cheer: None,
+                created_at: second_time,
+            },
+        )
+        .await
+        .unwrap();
+
+        ChatHistoryModel::delete_before(&db, second_time.checked_sub_days(Days::new(1)).unwrap())
+            .await
+            .unwrap();
+
+        let count = ChatHistoryModel::count_since(
+            &db,
+            first_time.checked_sub_days(Days::new(1)).unwrap(),
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(count, 3);
+    }
 }

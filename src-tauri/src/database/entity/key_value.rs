@@ -76,18 +76,134 @@ impl KeyValueModel {
 
 #[cfg(test)]
 mod test {
-    #[tokio::test]
-    async fn test_create() {}
+    use crate::database::{
+        entity::key_value::{CreateKeyValue, KeyValueModel, KeyValueType},
+        mock_database,
+    };
 
     #[tokio::test]
-    async fn test_create_existing() {}
+    async fn test_create() {
+        let db = mock_database().await;
+
+        KeyValueModel::create(
+            &db,
+            CreateKeyValue {
+                key: "test".to_string(),
+                value: "test_value".to_string(),
+                ty: KeyValueType::Text,
+            },
+        )
+        .await
+        .unwrap();
+
+        let model = KeyValueModel::get_by_key(&db, "test")
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(model.value, "test_value".to_string());
+        assert!(matches!(model.ty, KeyValueType::Text));
+    }
 
     #[tokio::test]
-    async fn test_get_by_key_unknown() {}
+    async fn test_create_existing() {
+        let db = mock_database().await;
+
+        KeyValueModel::create(
+            &db,
+            CreateKeyValue {
+                key: "test".to_string(),
+                value: "test_value".to_string(),
+                ty: KeyValueType::Text,
+            },
+        )
+        .await
+        .unwrap();
+
+        let model = KeyValueModel::get_by_key(&db, "test")
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(model.value, "test_value".to_string());
+        assert!(matches!(model.ty, KeyValueType::Text));
+
+        let db = mock_database().await;
+
+        KeyValueModel::create(
+            &db,
+            CreateKeyValue {
+                key: "test".to_string(),
+                value: "test_value_2".to_string(),
+                ty: KeyValueType::Text,
+            },
+        )
+        .await
+        .unwrap();
+
+        let model = KeyValueModel::get_by_key(&db, "test")
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(model.value, "test_value_2".to_string());
+        assert!(matches!(model.ty, KeyValueType::Text));
+    }
 
     #[tokio::test]
-    async fn test_get_by_key_known() {}
+    async fn test_get_by_key_unknown() {
+        let db = mock_database().await;
+
+        let model = KeyValueModel::get_by_key(&db, "test").await.unwrap();
+        assert!(model.is_none());
+    }
 
     #[tokio::test]
-    async fn test_delete_by_key() {}
+    async fn test_get_by_key_known() {
+        let db = mock_database().await;
+
+        KeyValueModel::create(
+            &db,
+            CreateKeyValue {
+                key: "test".to_string(),
+                value: "test_value".to_string(),
+                ty: KeyValueType::Text,
+            },
+        )
+        .await
+        .unwrap();
+
+        let model = KeyValueModel::get_by_key(&db, "test")
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(model.value, "test_value".to_string());
+        assert!(matches!(model.ty, KeyValueType::Text));
+    }
+
+    #[tokio::test]
+    async fn test_delete_by_key() {
+        let db = mock_database().await;
+
+        KeyValueModel::create(
+            &db,
+            CreateKeyValue {
+                key: "test".to_string(),
+                value: "test_value".to_string(),
+                ty: KeyValueType::Text,
+            },
+        )
+        .await
+        .unwrap();
+
+        KeyValueModel::get_by_key(&db, "test")
+            .await
+            .unwrap()
+            .unwrap();
+
+        KeyValueModel::delete_by_key(&db, "test").await.unwrap();
+        let model = KeyValueModel::get_by_key(&db, "test").await.unwrap();
+        assert!(model.is_none());
+    }
 }
