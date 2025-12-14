@@ -209,8 +209,7 @@ impl SoundModel {
 
     pub async fn update_order(db: &DbPool, data: Vec<UpdateOrdering>) -> DbResult<()> {
         for order_chunk in data.chunks(1000) {
-            let cases = std::iter::repeat_n("WHEN ? THEN ?", order_chunk.len())
-                .join(" ");
+            let cases = std::iter::repeat_n("WHEN ? THEN ?", order_chunk.len()).join(" ");
 
             let sql = format!(
                 r#"
@@ -242,4 +241,52 @@ impl SoundModel {
 
         Ok(())
     }
+}
+
+#[cfg(test)]
+mod test {
+    #[tokio::test]
+    async fn test_create() {}
+
+    #[tokio::test]
+    async fn test_get_by_id_unknown() {}
+
+    #[tokio::test]
+    async fn test_get_by_id_known() {}
+
+    #[tokio::test]
+    async fn test_get_by_id_partial_unknown() {}
+
+    #[tokio::test]
+    async fn test_get_by_id_partial_known() {}
+
+    #[tokio::test]
+    async fn test_get_by_ids() {}
+
+    #[tokio::test]
+    async fn test_get_by_ids_missing() {}
+
+    #[tokio::test]
+    async fn test_get_by_ids_partial() {}
+
+    #[tokio::test]
+    async fn test_get_by_ids_partial_missing() {}
+
+    #[tokio::test]
+    async fn test_get_all() {}
+
+    #[tokio::test]
+    async fn test_get_by_names() {}
+
+    #[tokio::test]
+    async fn test_get_by_names_ignore_case() {}
+
+    #[tokio::test]
+    async fn test_update() {}
+
+    #[tokio::test]
+    async fn test_update_order() {}
+
+    #[tokio::test]
+    async fn test_delete() {}
 }

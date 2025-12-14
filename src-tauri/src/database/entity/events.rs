@@ -326,7 +326,7 @@ impl EventModel {
         trigger_type: EventTriggerType,
     ) -> DbResult<Vec<EventModel>> {
         sqlx::query_as(
-            r#"SELECT * FROM "events" 
+            r#"SELECT * FROM "events"
                     WHERE "trigger_type" = ? AND "enabled" = TRUE
                     ORDER BY "order" ASC, "created_at" DESC"#,
         )
@@ -401,4 +401,41 @@ impl EventModel {
 
         Ok(())
     }
+}
+
+#[cfg(test)]
+mod test {
+
+    #[tokio::test]
+    async fn test_create() {}
+
+    #[tokio::test]
+    async fn test_get_by_id_unknown() {}
+
+    #[tokio::test]
+    async fn test_get_by_id_known() {}
+
+    #[tokio::test]
+    async fn test_get_by_ids_missing() {}
+
+    #[tokio::test]
+    async fn test_get_by_ids() {}
+
+    #[tokio::test]
+    async fn test_get_by_trigger_type_unknown() {}
+
+    #[tokio::test]
+    async fn test_get_by_trigger_type_known() {}
+
+    #[tokio::test]
+    async fn test_get_all() {}
+
+    #[tokio::test]
+    async fn test_update() {}
+
+    #[tokio::test]
+    async fn test_update_order() {}
+
+    #[tokio::test]
+    async fn test_delete() {}
 }

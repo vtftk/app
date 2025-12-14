@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use chrono::Utc;
 use log::{debug, error};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -13,13 +13,13 @@ use uuid::Uuid;
 
 use crate::{
     database::{
+        DbPool,
         entity::{
             chat_history::{ChatHistoryModel, CreateChatHistory},
             commands::CommandModel,
             event_execution::EventExecutionModel,
             events::{EventModel, EventTrigger, EventTriggerType},
         },
-        DbPool,
     },
     events::{
         TwitchEventAdBreakBegin, TwitchEventChatMsg, TwitchEventCheerBits, TwitchEventFollow,

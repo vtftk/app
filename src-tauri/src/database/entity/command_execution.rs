@@ -70,8 +70,8 @@ impl CommandExecutionModel {
         offset: u64,
     ) -> DbResult<Option<CommandExecutionModel>> {
         sqlx::query_as(
-            r#"SELECT * FROM "command_executions" 
-            WHERE "command_id" = ?  
+            r#"SELECT * FROM "command_executions"
+            WHERE "command_id" = ?
             ORDER BY "created_at" DESC
             LIMIT 1 OFFSET ?"#,
         )
@@ -103,7 +103,7 @@ impl CommandExecutionModel {
 
         let sql = format!(
             r#"SELECT * FROM "command_executions" WHERE {condition}
-            ORDER BY "created_at" DESC 
+            ORDER BY "created_at" DESC
             {offset}"#
         );
 
@@ -164,4 +164,52 @@ impl CommandExecutionModel {
         .await?;
         Ok(result.0)
     }
+}
+
+#[cfg(test)]
+mod test {
+    #[tokio::test]
+    async fn test_create() {}
+
+    #[tokio::test]
+    async fn test_last_executed_none() {}
+
+    #[tokio::test]
+    async fn test_last_executed_some() {}
+
+    #[tokio::test]
+    async fn test_last_executed_offset() {}
+
+    #[tokio::test]
+    async fn test_last_executed_offset_none() {}
+
+    #[tokio::test]
+    async fn test_query_open_start_date() {}
+
+    #[tokio::test]
+    async fn test_query_open_end_date() {}
+
+    #[tokio::test]
+    async fn test_query_closed_date() {}
+
+    #[tokio::test]
+    async fn test_query_default_limit() {}
+
+    #[tokio::test]
+    async fn test_query_custom_limit() {}
+
+    #[tokio::test]
+    async fn test_query_offset() {}
+
+    #[tokio::test]
+    async fn test_delete_before() {}
+
+    #[tokio::test]
+    async fn test_delete_by_ids() {}
+
+    #[tokio::test]
+    async fn test_estimate_size() {}
+
+    #[tokio::test]
+    async fn test_estimate_size_empty() {}
 }

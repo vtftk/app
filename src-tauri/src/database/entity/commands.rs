@@ -215,3 +215,37 @@ impl CommandModel {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+
+    #[tokio::test]
+    async fn test_create() {}
+
+    #[tokio::test]
+    async fn test_get_by_command_unknown() {}
+
+    #[tokio::test]
+    async fn test_get_by_command() {}
+
+    #[tokio::test]
+    async fn test_get_by_command_through_alias() {}
+
+    #[tokio::test]
+    async fn test_get_by_id_unknown() {}
+
+    #[tokio::test]
+    async fn test_get_by_id_known() {}
+
+    #[tokio::test]
+    async fn test_get_all() {}
+
+    #[tokio::test]
+    async fn test_update() {}
+
+    #[tokio::test]
+    async fn test_update_order() {}
+
+    #[tokio::test]
+    async fn test_delete() {}
+}

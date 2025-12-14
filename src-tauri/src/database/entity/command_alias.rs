@@ -61,7 +61,7 @@ impl CommandAliasModel {
         let values_sets = std::iter::repeat_n("(?,?,?,?)", aliases.len()).join(",");
 
         let sql = format!(
-            r#"INSERT INTO "command_alias" ("id", "command_id", "alias", "order) 
+            r#"INSERT INTO "command_alias" ("id", "command_id", "alias", "order)
             VALUES {values_sets}
             "#
         );
@@ -79,4 +79,16 @@ impl CommandAliasModel {
         query.execute(db).await?;
         Ok(())
     }
+}
+
+#[cfg(test)]
+mod test {
+    #[tokio::test]
+    async fn test_set_aliases_initial() {}
+
+    #[tokio::test]
+    async fn test_set_aliases_update() {}
+
+    #[tokio::test]
+    async fn test_get_aliases() {}
 }

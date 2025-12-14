@@ -94,3 +94,24 @@ impl ChatHistoryModel {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+    #[tokio::test]
+    async fn test_create() {}
+
+    #[tokio::test]
+    async fn test_estimate_size() {}
+
+    #[tokio::test]
+    async fn test_estimate_size_empty() {}
+
+    #[tokio::test]
+    async fn test_count_since() {}
+
+    #[tokio::test]
+    async fn test_count_since_empty() {}
+
+    #[tokio::test]
+    async fn test_delete_before() {}
+}

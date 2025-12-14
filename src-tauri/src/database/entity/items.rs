@@ -151,7 +151,7 @@ impl ItemModel {
         Ok(result)
     }
 
-    pub async fn with_items_sounds(
+    async fn with_items_sounds(
         db: &DbPool,
         items: Vec<ItemModel>,
     ) -> DbResult<Vec<ItemWithSounds>> {
@@ -323,7 +323,7 @@ impl ItemModel {
         Ok(())
     }
 
-    /// Sets the impact sounds for this item
+    /// Sets the sounds of a specific sound type for this item
     pub async fn set_sounds(
         &self,
         db: &DbPool,
@@ -414,4 +414,47 @@ impl ItemModel {
 
         Ok(())
     }
+}
+
+#[cfg(test)]
+mod test {
+
+    #[tokio::test]
+    async fn test_create() {}
+
+    #[tokio::test]
+    async fn test_get_all() {}
+
+    #[tokio::test]
+    async fn test_get_by_id_unknown() {}
+
+    #[tokio::test]
+    async fn test_get_by_id_known() {}
+
+    #[tokio::test]
+    async fn test_get_by_ids_with_sounds() {}
+
+    #[tokio::test]
+    async fn test_get_by_ids_with_sounds_missing() {}
+
+    #[tokio::test]
+    async fn test_get_by_names_with_sounds() {}
+
+    #[tokio::test]
+    async fn test_get_by_names_with_sounds_ignore_case() {}
+
+    #[tokio::test]
+    async fn test_update() {}
+
+    #[tokio::test]
+    async fn test_set_sounds() {}
+
+    #[tokio::test]
+    async fn test_append_sounds() {}
+
+    #[tokio::test]
+    async fn test_with_sounds() {}
+
+    #[tokio::test]
+    async fn test_delete() {}
 }

@@ -33,7 +33,9 @@
     "webbrowser",
     "singlefile",
     "unplugin",
-    "Resub"
+    "Resub",
+    "repr",
+    "mockuser"
   ],
   "userWords": [
     "Cheermote",

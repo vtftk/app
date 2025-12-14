@@ -73,3 +73,21 @@ impl KeyValueModel {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+    #[tokio::test]
+    async fn test_create() {}
+
+    #[tokio::test]
+    async fn test_create_existing() {}
+
+    #[tokio::test]
+    async fn test_get_by_key_unknown() {}
+
+    #[tokio::test]
+    async fn test_get_by_key_known() {}
+
+    #[tokio::test]
+    async fn test_delete_by_key() {}
+}

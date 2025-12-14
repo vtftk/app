@@ -69,3 +69,16 @@ impl ModelDataModel {
             .await
     }
 }
+
+#[cfg(test)]
+mod test {
+
+    #[tokio::test]
+    async fn test_create() {}
+
+    #[tokio::test]
+    async fn test_create_existing() {}
+
+    #[tokio::test]
+    async fn test_get_all() {}
+}
