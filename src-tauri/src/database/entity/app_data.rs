@@ -229,6 +229,7 @@ impl AppDataModel {
     /// Only one row should ever be created and should have this ID
     const SINGLETON_ID: i32 = 1;
 
+    /// Set the stored app data config
     pub async fn set(db: &DbPool, app_data: AppData) -> DbResult<AppDataModel> {
         let model = AppDataModel {
             id: Self::SINGLETON_ID,
@@ -259,6 +260,8 @@ impl AppDataModel {
         Ok(model)
     }
 
+    /// Load the app data config or creating a new one if there is not
+    /// one already present
     pub async fn get_or_default(db: &DbPool) -> DbResult<AppData> {
         let result: Option<AppDataModel> =
             sqlx::query_as(r#"SELECT * FROM "app_data" WHERE "id" = ?"#)
@@ -274,8 +277,8 @@ impl AppDataModel {
         Ok(model.data)
     }
 
-    /// HTTP port is loaded pretty frequently
-    #[cfg_attr(debug_assertions, allow(unused))]
+    /// HTTP port is loaded pretty frequently so this helper loads just
+    /// that portion from the app data
     pub async fn get_http_port(db: &DbPool) -> DbResult<u16> {
         let result: Option<(u16,)> = sqlx::query_as(
             r#"
@@ -294,6 +297,7 @@ impl AppDataModel {
         Ok(http_port)
     }
 
+    /// Obtain just the `main_config` portion of the stored app data
     pub async fn get_main_config(db: &DbPool) -> DbResult<MainConfig> {
         let result: Option<(sqlx::types::Json<MainConfig>,)> = sqlx::query_as(
             r#"
@@ -302,11 +306,190 @@ impl AppDataModel {
             WHERE "id" = ?
         "#,
         )
-        .bind(default_http_port())
         .bind(Self::SINGLETON_ID)
         .fetch_optional(db)
         .await?;
 
         Ok(result.map(|(value,)| value.0).unwrap_or_default())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::AppDataModel;
+    use crate::database::{
+        entity::app_data::{AppConfig, AppData, MainConfig, default_http_port},
+        mock_database,
+    };
+
+    /// Tests that the app data can be set on a fresh database
+    #[tokio::test]
+    async fn test_set_app_data_initial() {
+        let db = mock_database().await;
+
+        let app_data = AppData {
+            app: AppConfig {
+                main_config: MainConfig {
+                    http_port: 9090,
+                    ..Default::default()
+                },
+            },
+            ..Default::default()
+        };
+
+        let output = AppDataModel::set(&db, app_data.clone()).await.unwrap();
+
+        let a = serde_json::to_string(&output.data).unwrap();
+        let b = serde_json::to_string(&app_data).unwrap();
+        assert_eq!(a, b);
+
+        let value = AppDataModel::get_or_default(&db).await.unwrap();
+        let c = serde_json::to_string(&value).unwrap();
+        assert_eq!(b, c);
+    }
+
+    /// Tests that the app data can be set on an existing database
+    #[tokio::test]
+    async fn test_set_app_data_update() {
+        let db = mock_database().await;
+
+        let app_data = AppData {
+            app: AppConfig {
+                main_config: MainConfig {
+                    http_port: 9090,
+                    ..Default::default()
+                },
+            },
+            ..Default::default()
+        };
+
+        let output = AppDataModel::set(&db, app_data.clone()).await.unwrap();
+
+        let a = serde_json::to_string(&output.data).unwrap();
+        let b = serde_json::to_string(&app_data).unwrap();
+        assert_eq!(a, b);
+
+        let value = AppDataModel::get_or_default(&db).await.unwrap();
+        let c = serde_json::to_string(&value).unwrap();
+        assert_eq!(b, c);
+
+        let output = AppDataModel::set(&db, app_data.clone()).await.unwrap();
+
+        let a = serde_json::to_string(&output.data).unwrap();
+        let b = serde_json::to_string(&app_data).unwrap();
+        assert_eq!(a, b);
+
+        let value = AppDataModel::get_or_default(&db).await.unwrap();
+        let c = serde_json::to_string(&value).unwrap();
+        assert_eq!(b, c);
+    }
+
+    /// `get_or_default` should return a default when called on the empty
+    /// database
+    #[tokio::test]
+    async fn test_get_or_default_empty() {
+        let db = mock_database().await;
+        let value = AppDataModel::get_or_default(&db).await.unwrap();
+        let default = AppData::default();
+
+        let a = serde_json::to_string(&value).unwrap();
+        let b = serde_json::to_string(&default).unwrap();
+        assert_eq!(a, b);
+    }
+
+    /// Tests that `get_or_default` returns the existing app data when
+    /// it has already been set
+    #[tokio::test]
+    async fn test_get_or_default_existing() {
+        let db = mock_database().await;
+
+        let app_data = AppData {
+            app: AppConfig {
+                main_config: MainConfig {
+                    http_port: 9090,
+                    ..Default::default()
+                },
+            },
+            ..Default::default()
+        };
+
+        AppDataModel::set(&db, app_data.clone()).await.unwrap();
+        let value = AppDataModel::get_or_default(&db).await.unwrap();
+
+        let a = serde_json::to_string(&app_data).unwrap();
+        let b = serde_json::to_string(&value).unwrap();
+        assert_eq!(a, b);
+    }
+
+    /// Tests that `get_http_port` will return the default http port
+    /// when one has not yet been set
+    #[tokio::test]
+    async fn test_get_http_port_unset() {
+        let db = mock_database().await;
+        let value = AppDataModel::get_http_port(&db).await.unwrap();
+        let default_port = default_http_port();
+
+        assert_eq!(value, default_port);
+    }
+
+    /// Tests that `get_http_port` will return the stored port when
+    /// a custom one has been set
+    #[tokio::test]
+    async fn test_get_http_port_set() {
+        let db = mock_database().await;
+
+        let app_data = AppData {
+            app: AppConfig {
+                main_config: MainConfig {
+                    http_port: 9090,
+                    ..Default::default()
+                },
+            },
+            ..Default::default()
+        };
+
+        AppDataModel::set(&db, app_data.clone()).await.unwrap();
+        let value = AppDataModel::get_http_port(&db).await.unwrap();
+        assert_eq!(app_data.app.main_config.http_port, value);
+    }
+
+    /// Tests that `get_main_config` will return the default config when unset
+    #[tokio::test]
+    async fn test_get_main_config_unset() {
+        let db = mock_database().await;
+        let value = AppDataModel::get_main_config(&db).await.unwrap();
+        let default = MainConfig::default();
+
+        let a = serde_json::to_string(&value).unwrap();
+        let b = serde_json::to_string(&default).unwrap();
+
+        assert_eq!(a, b);
+    }
+
+    /// Tests that `get_main_config` will return the current config when set
+    #[tokio::test]
+    async fn test_get_main_config_set() {
+        let db = mock_database().await;
+
+        let main_config = MainConfig {
+            http_port: 9090,
+            ..Default::default()
+        };
+
+        let app_data = AppData {
+            app: AppConfig {
+                main_config: main_config.clone(),
+            },
+            ..Default::default()
+        };
+
+        AppDataModel::set(&db, app_data.clone()).await.unwrap();
+
+        let value = AppDataModel::get_main_config(&db).await.unwrap();
+
+        let a = serde_json::to_string(&value).unwrap();
+        let b = serde_json::to_string(&main_config).unwrap();
+
+        assert_eq!(a, b);
     }
 }
