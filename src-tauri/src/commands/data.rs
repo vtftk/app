@@ -1,6 +1,8 @@
 use crate::{
+    DISABLE_MINIMIZE_TRAY,
     commands::CmdResult,
     database::{
+        DbPool,
         entity::{
             app_data::{AppData, AppDataModel},
             chat_history::ChatHistoryModel,
@@ -9,7 +11,6 @@ use crate::{
             event_execution::EventExecutionModel,
             event_log::EventLogsModel,
         },
-        DbPool,
     },
     http::ServerPort,
     overlay::{OverlayData, OverlayDataStore, OverlayMessage, OverlayMessageSender},
@@ -107,4 +108,9 @@ pub async fn get_logs_estimate_size(db: tauri::State<'_, DbPool>) -> CmdResult<u
 #[tauri::command]
 pub fn get_http_port(port_state: State<'_, ServerPort>) -> CmdResult<u16> {
     Ok(port_state.inner().0)
+}
+
+#[tauri::command]
+pub fn disable_minimize_tray() {
+    *DISABLE_MINIMIZE_TRAY.lock() = true;
 }

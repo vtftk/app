@@ -1,20 +1,23 @@
 use anyhow::Context;
 use commands::events::update_scheduler_events;
-use database::{clean_old_data, entity::app_data::AppDataModel, DbPool};
+use database::{DbPool, clean_old_data, entity::app_data::AppDataModel};
 use events::{processing::process_events, scheduler::create_scheduler};
-use http::{create_http_socket, HttpExtensions, ServerPort};
+use http::{HttpExtensions, ServerPort, create_http_socket};
 use log::error;
-use overlay::{create_overlay_channel, OverlayDataStore};
-use script::runtime::{create_script_executor, ScriptRuntimeData};
+use overlay::{OverlayDataStore, create_overlay_channel};
+use parking_lot::Mutex;
+use script::runtime::{ScriptRuntimeData, create_script_executor};
 use std::error::Error;
 use storage::Storage;
 use tauri::{
-    async_runtime::{block_on, spawn},
     App, AppHandle, Manager, RunEvent,
+    async_runtime::{block_on, spawn},
 };
 use tauri_plugin_dialog::DialogExt;
 use tokio::sync::mpsc;
 use twitch::manager::Twitch;
+
+pub(crate) static DISABLE_MINIMIZE_TRAY: Mutex<bool> = Mutex::new(false);
 
 mod commands;
 mod database;
@@ -64,6 +67,7 @@ pub fn run() {
             data::get_executions_estimate_size,
             data::get_logs_estimate_size,
             data::get_http_port,
+            data::disable_minimize_tray,
             // Twitch commands
             twitch::get_twitch_oauth_uri,
             twitch::is_authenticated,
@@ -252,6 +256,12 @@ fn handle_duplicate_instance(app: &AppHandle, _args: Vec<String>, _cwd: String) 
 /// Handles app events, used for the minimize to tray event
 fn handle_app_event(app: &AppHandle, event: RunEvent) {
     if let tauri::RunEvent::ExitRequested { api, code, .. } = event {
+        // Don't try and minimize to tray if it was disabled
+        let disable_minimize = *DISABLE_MINIMIZE_TRAY.lock();
+        if disable_minimize {
+            return;
+        }
+
         let db = app.state::<DbPool>();
         let main_config = block_on(AppDataModel::get_main_config(db.inner()));
         let minimize_to_tray = main_config.is_ok_and(|value| value.minimize_to_tray);

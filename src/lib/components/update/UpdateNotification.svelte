@@ -1,5 +1,6 @@
 <script lang="ts">
   import { toast } from "svelte-sonner";
+  import { invoke } from "@tauri-apps/api/core";
   import { toastErrorMessage } from "$lib/utils/error";
   import { getAppContext } from "$lib/api/runtimeAppData";
   import { check, Update } from "@tauri-apps/plugin-updater";
@@ -48,7 +49,11 @@
       duration: Infinity,
       action: {
         label: "Install",
-        onClick: () => {
+        onClick: async () => {
+          // Disable minimizing to tray before installing to ensure it doesn't
+          // affect the restart required for updating
+          await invoke("disable_minimize_tray");
+
           update.install();
         },
       },
