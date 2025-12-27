@@ -61,7 +61,7 @@ impl CommandAliasModel {
         let values_sets = std::iter::repeat_n("(?,?,?,?)", aliases.len()).join(",");
 
         let sql = format!(
-            r#"INSERT INTO "command_alias" ("id", "command_id", "alias", "order)
+            r#"INSERT INTO "command_alias" ("id", "command_id", "alias", "order")
             VALUES {values_sets}
             "#
         );
@@ -83,12 +83,138 @@ impl CommandAliasModel {
 
 #[cfg(test)]
 mod test {
+    use super::CommandAliasModel;
+    use crate::database::{
+        entity::{
+            commands::{CommandConfig, CommandModel, CommandOutcome, CreateCommand},
+            shared::MinimumRequireRole,
+        },
+        mock_database,
+    };
+
+    /// Tests that the aliases can be set initially
     #[tokio::test]
-    async fn test_set_aliases_initial() {}
+    async fn test_set_aliases_initial() {
+        let db = mock_database().await;
+        let command = CommandModel::create(
+            &db,
+            CreateCommand {
+                enabled: true,
+                name: "test".to_string(),
+                command: "!test".to_string(),
+                config: CommandConfig {
+                    outcome: CommandOutcome::Template {
+                        message: "test".to_string(),
+                    },
+                    cooldown: Default::default(),
+                    require_role: MinimumRequireRole::None,
+                },
+                aliases: vec![],
+            },
+        )
+        .await
+        .unwrap();
+
+        CommandAliasModel::set_aliases(
+            &db,
+            command.id,
+            vec!["!test1".to_string(), "!test2".to_string()],
+        )
+        .await
+        .unwrap();
+    }
 
     #[tokio::test]
-    async fn test_set_aliases_update() {}
+    async fn test_set_aliases_update() {
+        let db = mock_database().await;
+        let command = CommandModel::create(
+            &db,
+            CreateCommand {
+                enabled: true,
+                name: "test".to_string(),
+                command: "!test".to_string(),
+                config: CommandConfig {
+                    outcome: CommandOutcome::Template {
+                        message: "test".to_string(),
+                    },
+                    cooldown: Default::default(),
+                    require_role: MinimumRequireRole::None,
+                },
+                aliases: vec![],
+            },
+        )
+        .await
+        .unwrap();
+
+        CommandAliasModel::set_aliases(
+            &db,
+            command.id,
+            vec!["!test1".to_string(), "!test2".to_string()],
+        )
+        .await
+        .unwrap();
+
+        let aliases = CommandAliasModel::get_aliases(&db, command.id)
+            .await
+            .unwrap();
+
+        assert_eq!(aliases, vec!["!test1".to_string(), "!test2".to_string()]);
+
+        CommandAliasModel::set_aliases(
+            &db,
+            command.id,
+            vec!["!test3".to_string(), "!test4".to_string()],
+        )
+        .await
+        .unwrap();
+
+        let aliases = CommandAliasModel::get_aliases(&db, command.id)
+            .await
+            .unwrap();
+
+        assert_eq!(aliases, vec!["!test3".to_string(), "!test4".to_string()]);
+    }
 
     #[tokio::test]
-    async fn test_get_aliases() {}
+    async fn test_get_aliases() {
+        let db = mock_database().await;
+        let command = CommandModel::create(
+            &db,
+            CreateCommand {
+                enabled: true,
+                name: "test".to_string(),
+                command: "!test".to_string(),
+                config: CommandConfig {
+                    outcome: CommandOutcome::Template {
+                        message: "test".to_string(),
+                    },
+                    cooldown: Default::default(),
+                    require_role: MinimumRequireRole::None,
+                },
+                aliases: vec![],
+            },
+        )
+        .await
+        .unwrap();
+
+        let aliases = CommandAliasModel::get_aliases(&db, command.id)
+            .await
+            .unwrap();
+
+        assert!(aliases.is_empty());
+
+        CommandAliasModel::set_aliases(
+            &db,
+            command.id,
+            vec!["!test3".to_string(), "!test4".to_string()],
+        )
+        .await
+        .unwrap();
+
+        let aliases = CommandAliasModel::get_aliases(&db, command.id)
+            .await
+            .unwrap();
+
+        assert_eq!(aliases, vec!["!test3".to_string(), "!test4".to_string()]);
+    }
 }
