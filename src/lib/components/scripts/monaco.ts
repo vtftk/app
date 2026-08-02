@@ -33,17 +33,15 @@ self.MonacoEnvironment = {
   getWorker: async function (_: string, label: string) {
     switch (label) {
       case "json": {
-        const jsonWorker = await import(
-          "monaco-editor/esm/vs/language/json/json.worker?worker"
-        );
+        const jsonWorker =
+          await import("monaco-editor/language/json/json.worker?worker");
         return new jsonWorker.default();
       }
       case "css":
       case "scss":
       case "less": {
-        const cssWorker = await import(
-          "monaco-editor/esm/vs/language/css/css.worker?worker"
-        );
+        const cssWorker =
+          await import("monaco-editor/language/css/css.worker?worker");
 
         return new cssWorker.default();
       }
@@ -51,22 +49,20 @@ self.MonacoEnvironment = {
       // case "handlebars":
       // case "razor": {
       //   const htmlWorker = await import(
-      //     "monaco-editor/esm/vs/language/html/html.worker?worker"
+      //     "monaco-editor/language/html/html.worker?worker"
       //   );
 
       //   return new htmlWorker.default();
       // }
       case "typescript":
       case "javascript": {
-        const tsWorker = await import(
-          "monaco-editor/esm/vs/language/typescript/ts.worker?worker"
-        );
+        const tsWorker =
+          await import("monaco-editor/language/typescript/ts.worker?worker");
         return new tsWorker.default();
       }
       default: {
-        const editorWorker = await import(
-          "monaco-editor/esm/vs/editor/editor.worker?worker"
-        );
+        const editorWorker =
+          await import("monaco-editor/editor/editor.worker?worker");
         return new editorWorker.default();
       }
     }
