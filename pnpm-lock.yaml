@@ -4,6 +4,12 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  cookie@<0.7.0: ^0.7.0
+  dompurify@<3.4.9: ^3.4.9
+  dompurify@<=3.4.10: ^3.4.11
+  dompurify@<=3.4.11: ^3.4.12
+
 importers:
 
   .:
@@ -118,37 +124,37 @@ importers:
   overlay:
     devDependencies:
       '@eslint/js':
-        specifier: ^9.17.0
+        specifier: ^9.39.5
         version: 9.39.5
       eslint:
-        specifier: ^9.17.0
+        specifier: ^9.39.5
         version: 9.39.5(supports-color@8.1.1)
       eslint-plugin-perfectionist:
-        specifier: ^4.3.0
+        specifier: ^4.15.1
         version: 4.15.1(eslint@9.39.5(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.6.3)
       eslint-plugin-unused-imports:
-        specifier: ^4.1.4
+        specifier: ^4.4.1
         version: 4.4.1(@typescript-eslint/eslint-plugin@8.65.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.6.3))(eslint@9.39.5(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.6.3))(eslint@9.39.5(supports-color@8.1.1))
       prettier:
-        specifier: ^3.4.2
+        specifier: ^3.9.6
         version: 3.9.6
       typescript:
-        specifier: ~5.6.2
+        specifier: ~5.6.3
         version: 5.6.3
       typescript-eslint:
-        specifier: ^8.18.0
+        specifier: ^8.65.0
         version: 8.65.0(eslint@9.39.5(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.6.3)
       vite:
-        specifier: ^7.1.5
+        specifier: ^7.3.6
         version: 7.3.6(@types/node@26.1.2)(terser@5.49.0)
       vite-plugin-singlefile:
-        specifier: ^2.3.0
+        specifier: ^2.3.3
         version: 2.3.3(rollup@4.62.4)(vite@7.3.6(@types/node@26.1.2)(terser@5.49.0))
 
   scripting:
     dependencies:
       date-fns:
-        specifier: ^4.1.0
+        specifier: ^4.4.0
         version: 4.4.0
     devDependencies:
       '@rollup/plugin-node-resolve':
@@ -164,25 +170,25 @@ importers:
         specifier: ^29.5.14
         version: 29.5.14
       glob:
-        specifier: ^11.0.0
+        specifier: ^11.1.0
         version: 11.1.0
       jest:
         specifier: ^29.7.0
         version: 29.7.0(@types/node@26.1.2)(supports-color@8.1.1)
       prettier:
-        specifier: ^3.4.2
+        specifier: ^3.9.6
         version: 3.9.6
       rollup:
-        specifier: ^4.29.1
+        specifier: ^4.62.4
         version: 4.62.4
       rollup-plugin-dts:
-        specifier: ^6.1.1
+        specifier: ^6.4.1
         version: 6.4.1(rollup@4.62.4)(typescript@5.9.3)
       tslib:
         specifier: ^2.8.1
         version: 2.8.1
       typescript:
-        specifier: ^5.7.2
+        specifier: ^5.9.3
         version: 5.9.3
 
 packages:
@@ -1370,8 +1376,8 @@ packages:
   convert-source-map@2.0.0:
     resolution: {integrity: sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg==}
 
-  cookie@0.6.0:
-    resolution: {integrity: sha512-U71cyTamuh1CRNCfpGY6to28lxvNwPG4Guz/EVjgf3Jmzv0vlDp1atT9eS5dDjMYHucpHbWns6Lwf3BKz6svdw==}
+  cookie@0.7.2:
+    resolution: {integrity: sha512-yki5XnKuf750l50uGTllt6kKILY4nQ1eNIQatoXEByZ5dWgnKqbnqmTrBE5B4N7lrMJKQ2ytWMiTO2o0v6Ew/w==}
     engines: {node: '>= 0.6'}
 
   create-jest@29.7.0:
@@ -1430,8 +1436,8 @@ packages:
     resolution: {integrity: sha512-EjePK1srD3P08o2j4f0ExnylqRs5B9tJjcp9t1krH2qRi8CCdsYfwe9JgSLurFBWwq4uOlipzfk5fHNvwFKr8Q==}
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
 
-  dompurify@3.4.8:
-    resolution: {integrity: sha512-yb1cEmaOum7wFvOCSQxyfgVlv5D47Rc30iZWoMpbDIWTnJ6grDDQyu2KFJzB2k7u0pMuJcQ1zphH//fFnw2tjQ==}
+  dompurify@3.4.12:
+    resolution: {integrity: sha512-zQvGet8Z2sWbQhCmfFz/T5QWH2oBmjnqK3qvOjaqaNLrLEF912WamU+ohnTp0TCep/MFVHpdJuCZEdFOdTnEFg==}
 
   electron-to-chromium@1.5.399:
     resolution: {integrity: sha512-lEcqhErbHjXRvd41rnWLpzbyU/IXfIYo7QwaFWmxGeLiLyY2TBCdHnWY88vB+p3ubnihRypDm66panXl7TylLA==}
@@ -3442,7 +3448,7 @@ snapshots:
       '@sveltejs/vite-plugin-svelte': 6.2.4(svelte@5.56.8(@typescript-eslint/types@8.65.0))(vite@7.3.6(@types/node@26.1.2)(terser@5.49.0))
       '@types/cookie': 0.6.0
       acorn: 8.18.0
-      cookie: 0.6.0
+      cookie: 0.7.2
       devalue: 5.9.0
       esm-env: 1.2.2
       kleur: 4.1.5
@@ -3975,7 +3981,7 @@ snapshots:
 
   convert-source-map@2.0.0: {}
 
-  cookie@0.6.0: {}
+  cookie@0.7.2: {}
 
   create-jest@29.7.0(@types/node@26.1.2)(supports-color@8.1.1):
     dependencies:
@@ -4022,7 +4028,7 @@ snapshots:
 
   diff-sequences@29.6.3: {}
 
-  dompurify@3.4.8:
+  dompurify@3.4.12:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
 
@@ -4853,7 +4859,7 @@ snapshots:
 
   monaco-editor@0.56.0:
     dependencies:
-      dompurify: 3.4.8
+      dompurify: 3.4.12
       marked: 14.0.0
 
   mri@1.2.0: {}
