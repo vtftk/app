@@ -54,31 +54,23 @@ jobs:
         # webkitgtk 4.0 is for Tauri v1 - webkitgtk 4.1 is for Tauri v2.
         # You can remove the one that doesn't apply to your app to speed up the workflow a bit.
 
+      - uses: pnpm/action-setup@v6
+
       # Required due to svelte tsconfig
       - name: setup svelte config
         run: mkdir .svelte-kit && echo "{}" > .svelte-kit/tsconfig.json
 
-      - name: install frontend dependencies
-        run: npm install
-
-      - name: install overlay dependencies
-        run: npm install
-        working-directory: overlay
-
-      - name: install scripting dependencies
-        run: npm install
-        working-directory: scripting
+      - name: install dependencies
+        run: pnpm install
 
       - name: generate THIRD_PARTY_LICENSES.md
-        run: npm run make:licenses
+        run: pnpm run make:licenses
 
       - name: build overlay
-        run: npm run build
-        working-directory: overlay
+        run: pnpm --filter overlay run build
 
       - name: build scripting
-        run: npm run build
-        working-directory: scripting
+        run: pnpm --filter scripting run build
 
       - uses: tauri-apps/tauri-action@v0
         env:

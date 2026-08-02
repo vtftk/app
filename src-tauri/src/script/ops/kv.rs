@@ -2,11 +2,11 @@ use crate::{
     database::entity::key_value::{CreateKeyValue, KeyValueModel, KeyValueType},
     script::runtime::ScriptRuntimeDataExt,
 };
-use deno_core::{op2, OpState};
+use deno_core::{OpState, op2};
 use deno_error::JsErrorBox;
 use std::{cell::RefCell, rc::Rc};
 
-#[op2(async)]
+#[op2]
 #[string]
 pub async fn op_kv_get(
     state: Rc<RefCell<OpState>>,
@@ -21,7 +21,7 @@ pub async fn op_kv_get(
     Ok(value)
 }
 
-#[op2(async)]
+#[op2]
 #[string]
 pub async fn op_kv_remove(
     state: Rc<RefCell<OpState>>,
@@ -37,7 +37,7 @@ pub async fn op_kv_remove(
     Ok(())
 }
 
-#[op2(async)]
+#[op2]
 pub async fn op_kv_set(
     state: Rc<RefCell<OpState>>,
     #[string] ty: String,

@@ -14,7 +14,7 @@ pub fn op_uuid_v4() -> String {
 }
 
 /// Sleep for some duration in milliseconds
-#[op2(async)]
+#[op2]
 pub async fn op_sleep(duration_ms: u32) -> Result<(), JsErrorBox> {
     sleep(Duration::from_millis(duration_ms as u64)).await;
     Ok(())

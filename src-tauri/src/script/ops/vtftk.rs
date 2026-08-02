@@ -6,13 +6,13 @@ use crate::{
     overlay::OverlayMessage,
     script::runtime::ScriptRuntimeDataExt,
 };
-use deno_core::{op2, OpState};
+use deno_core::{OpState, op2};
 use deno_error::JsErrorBox;
 use std::{cell::RefCell, rc::Rc};
 use uuid::Uuid;
 
 /// Emit event messages to the websocket
-#[op2(async)]
+#[op2]
 #[serde]
 pub async fn op_vtftk_emit_overlay_message(
     state: Rc<RefCell<OpState>>,
@@ -28,7 +28,7 @@ pub async fn op_vtftk_emit_overlay_message(
 }
 
 /// Find items by name
-#[op2(async)]
+#[op2]
 #[serde]
 pub async fn op_vtftk_get_items_by_names(
     state: Rc<RefCell<OpState>>,
@@ -46,7 +46,7 @@ pub async fn op_vtftk_get_items_by_names(
 }
 
 /// Find items by ids
-#[op2(async)]
+#[op2]
 #[serde]
 pub async fn op_vtftk_get_items_by_ids(
     state: Rc<RefCell<OpState>>,
@@ -64,7 +64,7 @@ pub async fn op_vtftk_get_items_by_ids(
 }
 
 /// Find sounds by name
-#[op2(async)]
+#[op2]
 #[serde]
 pub async fn op_vtftk_get_sounds_by_names(
     state: Rc<RefCell<OpState>>,
@@ -82,7 +82,7 @@ pub async fn op_vtftk_get_sounds_by_names(
 }
 
 /// Find sound by ID
-#[op2(async)]
+#[op2]
 #[serde]
 pub async fn op_vtftk_get_sounds_by_ids(
     state: Rc<RefCell<OpState>>,

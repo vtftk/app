@@ -6,7 +6,7 @@ use deno_core::op2;
 use deno_error::JsErrorBox;
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DisplayFromStr, DurationMilliSeconds, Map};
+use serde_with::{DisplayFromStr, DurationMilliSeconds, Map, serde_as};
 use std::time::Duration;
 
 /// Request structure from JS to perform an HTTP request
@@ -75,7 +75,7 @@ pub enum HttpResponseBody {
 }
 
 /// Operation for performing a GET request to a specific URL from JS
-#[op2(async)]
+#[op2]
 #[serde]
 pub async fn op_http_request(#[serde] req: HttpRequest) -> Result<HttpResponse, JsErrorBox> {
     // Get or create HTTP client

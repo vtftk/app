@@ -1,5 +1,5 @@
 {
-  "name": "vtftk-scripting",
+  "name": "scripting",
   "version": "0.0.1",
   "description": "Scripting runtime for VTFTK",
   "main": "index.js",
