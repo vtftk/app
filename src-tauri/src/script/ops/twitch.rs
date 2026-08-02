@@ -1,5 +1,5 @@
 use crate::{script::runtime::ScriptRuntimeDataExt, twitch::manager::TWITCH_CLIENT_ID};
-use deno_core::{op2, OpState};
+use deno_core::{OpState, op2};
 use deno_error::JsErrorBox;
 use serde::Serialize;
 use std::{cell::RefCell, rc::Rc};
@@ -16,7 +16,7 @@ pub struct TwitchCredentials {
 }
 
 /// Get twitch credentials within JS
-#[op2(async)]
+#[op2]
 #[serde]
 pub async fn op_twitch_get_credentials(
     state: Rc<RefCell<OpState>>,
