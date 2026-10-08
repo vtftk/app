@@ -89,12 +89,9 @@
     high: number;
     offset: number;
   }) {
-    let middle = 0;
-    let currentOffset = 0;
-
     while (low <= high) {
-      middle = low + Math.floor((high - low) / 2);
-      currentOffset = middle * itemHeight;
+      const middle = low + Math.floor((high - low) / 2);
+      const currentOffset = middle * itemHeight;
 
       if (currentOffset === offset) {
         return middle;
