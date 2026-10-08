@@ -20,9 +20,9 @@ deno_core = "0.409.0"
 # Tauri for frontend UI and its plugins
 tauri = { version = "2.11.5", features = ["tray-icon", "devtools"] }
 tauri-plugin-single-instance = "2.4.3"
-tauri-plugin-updater = "2.10.1"
+tauri-plugin-updater = "2.13.1"
 tauri-plugin-dialog = "2.7.2"
-tauri-plugin-opener = "2.5.4"
+tauri-plugin-opener = "2.7.0"
 
 # Twitch API for working with twitch
 twitch_api = { version = "0.7.2", features = [
